@@ -50,7 +50,8 @@ per step, is the deliverable. No automation, no AI yet.
   orchestrator's own `project` record manually IS in scope — that's the ID source of truth.
 
 ## Stack & setup
-- Next.js (App Router), JS or TS, matching the house style of the other repos.
+- Next.js (App Router), **TypeScript** (decided — long-lived "brain" with many cross-system
+  contracts; matches the portal + onboarding-form house style).
 - Neon Postgres via a lazy server-only client (mirror `ez-wins-portal/lib/db.ts`).
 - Single-user auth: reuse the pattern in `moc-setup-form/lib/security.js`
   (`ADMIN_PASSWORD` + Redis-backed admin session token, cookie holds the token not the
@@ -146,8 +147,11 @@ IDs (`CLICKUP_LIST_FEED_APPROVAL`/`_ONBOARDING_WORKING`/`_SUPPORT`/`_PLANNER`),
   without asking.
 - Ship Phase 0 on its own; don't scaffold later phases.
 
-## Confirm before guessing (do not assume)
+## Confirm before guessing (do not assume) — all resolved
 1. ~~Which Companies Inbound list ID is canonical.~~ **Resolved:** four lists, distinct stages
    (see Wiring 2). No single "canonical" list — wire each to its type.
-2. Whether I make the portal `project_id` column change myself or you do it.
-3. TS vs JS for the orchestrator (match what I tell you).
+2. ~~Whether I make the portal `project_id` column change.~~ **Resolved:** Blake makes the portal
+   change himself (5 steps: Neon `alter table` first, then `neon-schema.sql`, then the GET map,
+   POST insert columns+values, and ON CONFLICT in `app/api/storage/route.ts`). Orchestrator only
+   **writes/reads** `projectId` on an existing dealer via the storage API — does not touch the portal repo.
+3. ~~TS vs JS.~~ **Resolved: TypeScript.**
