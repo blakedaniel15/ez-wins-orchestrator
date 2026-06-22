@@ -35,12 +35,19 @@ per step, is the deliverable. No automation, no AI yet.
 - New repo `ez-wins-orchestrator`, own Vercel project, own Neon DB.
 - `project` table + atomic typed-ID minting.
 - Three reference wirings (portal column, ClickUp field, Outlook category).
-- Minimal password-gated internal page to run the acceptance test.
+- Minimal password-gated internal page that is **both** the acceptance-test harness **and** the
+  manual "New Project" tool: a form to mint a project with real fields (type, dealer, `dms`,
+  `conduit`, MOC reps), with a **dedup check** that warns if a project already exists for that
+  dealer, then **direct-attach** to an existing thread by pasting its `conversationId` / message
+  link (stamps `EZW-{id}` category + stores the link). This is the manual escape hatch; the
+  propose-and-approve auto-link comes in Phase 1.
 
 ## Explicitly OUT of scope (do not build)
 - AI classification, roster extraction, cadence/follow-up engine, the outbox/action queue,
-  Playwright, welcome emails, dealer/task creation flows. Those are later phases. In this
-  phase we link to **existing** dealers/tasks/threads, we don't create them.
+  Playwright, welcome emails. Those are later phases.
+- **Auto-creating** ClickUp tasks / portal dealers from a project. In this phase we **link to
+  existing** dealers/tasks/threads (paste their handles); we don't create them. Minting the
+  orchestrator's own `project` record manually IS in scope — that's the ID source of truth.
 
 ## Stack & setup
 - Next.js (App Router), JS or TS, matching the house style of the other repos.

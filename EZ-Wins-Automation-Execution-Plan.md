@@ -75,6 +75,30 @@ warranty-uplift requests, and investigation threads all originate in Blake's inb
 an analysis step in a separate app in the middle, but the project is still born from, and the
 letter still returns to, the same thread.
 
+### Manual project creation (the escape hatch)
+
+Not everything starts cleanly from auto-detection — sometimes Blake wants to start a project
+proactively, or the detector missed one. The manual path **creates in the orchestrator** (never in
+ClickUp first), so the ID is always minted by the single source of truth, then connects the thread
+as a separate, reversible step. All connect methods converge on the same end state:
+`conversationId` stored on the project **+** an `EZW-{projectId}` Graph category on the thread.
+
+1. **Create** — a "New Project" form on the orchestrator's internal page: type (ONB/SUP/WUP/INV),
+   dealer name, `dms`, `conduit`, MOC reps, optional notes. It runs a **dedup check first** (warns
+   "a project for this dealer already exists — link instead?"), mints the ID, and optionally creates
+   the ClickUp task on that type's list.
+2. **Connect the thread** — any of three convergent entry points:
+   - **Direct attach** — paste the thread's `conversationId` or an Outlook message link; the
+     orchestrator stamps the category and stores the link. Deterministic, instant. *(Phase 0.)*
+   - **Tag-in-Outlook** — Blake applies the `EZW-{id}` category to the thread himself; the next
+     sweep reads it and binds. (Robust version of "paste the ID into the thread.") *(Phase 1.)*
+   - **Propose-and-approve** — the orchestrator spots an unlinked thread matching the project
+     (dealer/contact) and proposes the link in the OUTBOX for one-tap approval. *(Phase 1.)*
+
+Sequencing: direct-attach ships in **Phase 0** (a small extension of the internal page, which
+already mints + runs the three wirings). Propose-and-approve arrives in **Phase 1** with the OUTBOX.
+Expected day-to-day: live in propose-and-approve, with direct-attach as the manual fallback.
+
 ---
 
 ## Task types (the universe the spine must cover)
