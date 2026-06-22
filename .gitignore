@@ -1,5 +1,8 @@
 node_modules/
 .next/
-.env*
+.env
+.env.local
+.env.*.local
 .vercel
 .DS_Store
+next-env.d.ts
