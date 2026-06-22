@@ -10,15 +10,25 @@ others for their contracts; do not edit them in this phase.
 Build the spine of the EZ Wins automation system: a new app that mints a universal project
 ID and links that ID across the portal, ClickUp, and Outlook. Nothing else.
 
-## Acceptance test (this phase is done when all four pass)
+**The system is type-agnostic from day one** — every project (onboarding, support, warranty
+uplift, investigation) rides this same spine, and every project is **born from an Outlook
+email thread**. So the Outlook wiring below (storing the thread's `conversationId`) is the
+**keystone**, not one wiring of three: `conversationId` is the idempotency key the whole
+system dedupes on later.
 
-1. I can mint a project ID (`ONB-2026-0001`, typed, sequential within the year).
+## Acceptance test (this phase is done when all five pass)
+
+1. I can mint a project ID, typed and sequential within the year — and prove it works for
+   **more than one type** (e.g. `ONB-2026-0001` **and** `SUP-2026-0001`), since the spine
+   serves all types.
 2. That ID gets written to an existing **portal dealer** row and reads back.
 3. That ID gets written to an existing **ClickUp task** custom field and reads back.
 4. That ID gets stamped on an existing **Outlook thread** (Graph category) and the thread's
-   `conversationId` is stored on the project row, so the link is bidirectional.
+   `conversationId` is stored on the project row, so the link is bidirectional (the keystone).
+5. Given a `conversationId` I paste in, the page finds the project it belongs to (proves the
+   thread→project lookup that every later phase relies on).
 
-A tiny internal page that performs 1–4 against IDs/handles I paste in, and shows green/red
+A tiny internal page that performs 1–5 against IDs/handles I paste in, and shows green/red
 per step, is the deliverable. No automation, no AI yet.
 
 ## In scope
@@ -96,12 +106,17 @@ change myself.
 
 ## Wiring 2 — ClickUp `project_id` custom field
 
-Create a **text** custom field named `project_id` on the Companies Inbound list. Note: the
-setup form uses list `901105435045`, the onboarding form + email assistant use `901113435718`
-— **ask me which is canonical before wiring.** ClickUp custom fields are addressed by UUID, not
-name (see how `ez-wins-email-assistant` maps `CONFIG.FIELDS` UUIDs). Resolve the field UUID
-once (via the ClickUp API `GET /list/{id}/field` or from the UI) and store it in an env var.
-Orchestrator writes the project ID to that field on an existing task and reads it back.
+There are **four** ClickUp lists, and they are **distinct stages, not duplicates** (resolved):
+- `901113435718` — Feed Approval Pending (onboarding waiting for integration approval = pipeline)
+- `901105435045` — approved onboarding working space (dev downloads, onboarding team completes)
+- `901106848667` — Support Requests
+- `901111643961` — Blake › Planner (investigation/decision tasks)
+
+For Phase 0, create the **text** custom field `project_id` on **all four lists** (so any task
+type can carry the ID), or at minimum on `901113435718` for the acceptance test. ClickUp custom
+fields are addressed by UUID, not name (see how `ez-wins-email-assistant` maps `CONFIG.FIELDS`
+UUIDs). Resolve the field UUID(s) via the ClickUp API `GET /list/{id}/field` or the UI and store
+in env vars. Orchestrator writes the project ID to that field on an existing task and reads it back.
 
 ## Wiring 3 — Outlook thread tag
 
@@ -114,14 +129,18 @@ sort client-side.
 
 ## Env vars (this phase)
 `DATABASE_URL`, `ADMIN_PASSWORD`, Redis (`KV_REST_API_URL`/`KV_REST_API_TOKEN`),
-`CLICKUP_API_TOKEN`, `CLICKUP_PROJECT_ID_FIELD_UUID`, `CLICKUP_LIST_ID` (canonical inbound),
+`CLICKUP_API_TOKEN`, `CLICKUP_PROJECT_ID_FIELD_UUID` (per list if UUIDs differ), the four list
+IDs (`CLICKUP_LIST_FEED_APPROVAL`/`_ONBOARDING_WORKING`/`_SUPPORT`/`_PLANNER`),
 `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_USER_EMAIL`, portal storage API base URL.
 
 ## Build / commit / deploy rules
-- Commit only to `ez-wins-orchestrator`. Read the other repos; don't edit them without asking.
+- `ez-wins-orchestrator` is its **own git repo** (`git init`'d 2026-06-22; do not commit into the
+  stray home-level repo). Commit work to a `preview` branch. Read the other repos; don't edit them
+  without asking.
 - Ship Phase 0 on its own; don't scaffold later phases.
 
 ## Confirm before guessing (do not assume)
-1. Which Companies Inbound list ID is canonical (`901105435045` vs `901113435718`).
+1. ~~Which Companies Inbound list ID is canonical.~~ **Resolved:** four lists, distinct stages
+   (see Wiring 2). No single "canonical" list — wire each to its type.
 2. Whether I make the portal `project_id` column change myself or you do it.
 3. TS vs JS for the orchestrator (match what I tell you).
