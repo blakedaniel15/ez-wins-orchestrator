@@ -169,25 +169,30 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   }, []);
 
   async function createProject(force = false) {
-    setCreateMsg('');
+    setCreateMsg('Minting…');
     setDupe(null);
-    const res = await fetch('/api/projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type, dealer_name: dealerName || null, dms: dms || null, conduit: conduit || null, force }),
-    });
-    const j = await res.json();
-    if (j.ok) {
-      setCreateMsg(`Minted ${j.project.id}`);
-      setProjectId(j.project.id);
-      setDealerName('');
-      setDms('');
-      setConduit('');
-      loadProjects();
-    } else if (j.duplicate) {
-      setDupe(j.duplicate);
-    } else {
-      setCreateMsg(j.error || 'Failed.');
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, dealer_name: dealerName || null, dms: dms || null, conduit: conduit || null, force }),
+      });
+      const j = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+      if (j.ok) {
+        setCreateMsg(`✓ Minted ${j.project.id}`);
+        setProjectId(j.project.id);
+        setDealerName('');
+        setDms('');
+        setConduit('');
+        loadProjects();
+      } else if (j.duplicate) {
+        setCreateMsg('');
+        setDupe(j.duplicate);
+      } else {
+        setCreateMsg(`✗ ${j.error || 'Failed.'}`);
+      }
+    } catch (e: any) {
+      setCreateMsg(`✗ ${e.message || 'Request failed.'}`);
     }
   }
 
