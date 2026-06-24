@@ -1,25 +1,25 @@
 # EZ Wins Orchestrator — Status & Handoff
 
-**Last updated:** 2026-06-22
-**Current phase:** Phase 0 — **deployed and live**; acceptance test in progress (step 1 of 5 passing).
+**Last updated:** 2026-06-24
+**Current phase:** Phase 0 — ✅ **COMPLETE & signed off** (acceptance test 5/5 passing). Next up: Phase 1.
 
 ---
 
-## Where we left off
+## Phase 0 — DONE
 
-Phase 0 is built, on GitHub `main`, and **deploying green on Vercel** with all env vars
-provisioned. The acceptance test is mid-run:
+Built, on GitHub `main`, **deployed green on Vercel**, all env vars provisioned, and the full
+acceptance test **passed end-to-end against real production systems**:
 
 | # | Acceptance step | Status |
 |---|---|---|
-| 1 | Mint a typed project ID | ✅ **PASS** — minted `ONB-2026-0001` (Steve Hahn Volkswagen, Mercedes, Kia); shows in registry |
-| 2 | Write ID to a ClickUp task + read back | ⏳ not yet run — use task `868k1qgvn` |
-| 3 | Tag an Outlook thread + store conversationId | ⏳ not yet run — use the subject search in the UI |
-| 4 | Reverse-lookup project from conversationId | ⏳ not yet run |
-| 5 | Write ID to a portal dealer + read back | ⏳ not yet run — use dealer `seed_0` (Toyota Walnut Creek) |
+| 1 | Mint a typed project ID | ✅ minted `ONB-2026-0001` (Steve Hahn Volkswagen, Mercedes, Kia) |
+| 2 | Write ID to a ClickUp task + read back | ✅ task `868k1qgvn` |
+| 3 | Tag an Outlook thread + store conversationId | ✅ tagged 10 messages `EZW-ONB-2026-0001` |
+| 4 | Reverse-lookup project from conversationId | ✅ thread → `ONB-2026-0001` |
+| 5 | Write ID to a portal dealer + read back | ✅ dealer `d_1780607333618_egnvk` (Steve Hahn) |
 
-**Resume here:** sign in, Project ID `ONB-2026-0001` is pre-filled, run steps 2–5.
-(Optional: mint once as Support to confirm `SUP-2026-0001` — the multi-type check.)
+Note: the reverse-lookup field needs the thread's **conversationId** (long Graph string), not the
+project ID — a UI polish (auto-fill from the tagged thread) is an easy future tweak.
 
 ---
 
