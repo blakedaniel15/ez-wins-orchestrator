@@ -75,6 +75,15 @@ warranty-uplift requests, and investigation threads all originate in Blake's inb
 an analysis step in a separate app in the middle, but the project is still born from, and the
 letter still returns to, the same thread.
 
+**Groups: one thread → many dealerships (must-handle).** A dealer group can arrive as a SINGLE
+email thread covering N dealerships (real case 2026-06-24: 13 dealers via Fortellis, one thread,
+many separate Fortellis feeds/links). So `conversationId` alone can't be the whole key — a thread
+can map to a **group** with N child dealership projects. Design implication: each dealership still
+gets its own project ID (mirrors how `MOC-Onboarding-Form` creates one ClickUp task per store);
+they share a `group_name` / group link and the originating thread; and per-dealership signals (a
+Fortellis feed confirmation, a roster, a launch date) must be matched to the **specific** child
+project, not just the thread. The dedup/identity layer must resolve thread → group → which child.
+
 ### Manual project creation (the escape hatch)
 
 Not everything starts cleanly from auto-detection — sometimes Blake wants to start a project
@@ -278,8 +287,12 @@ authenticated sessions. On approval, **move the ClickUp task `901113435718` → 
 - **Reynolds:** parse the inbound approval ZIP for the ID → dev task. Surface "sign the docs" as an
   action when Blake's signature is needed (stays a human step by design).
 - **Tekion:** session stays live a while → near-autonomous subscription-ID pull off the approval email.
-- **Fortellis:** session expires in hours → pull the Excel and diff new feeds; if the session is
-  dead, drop a one-tap **"log in so I can grab the ID"** item into the queue, then pull.
+- **Fortellis:** **a per-feed confirmation email is sent when the data feed is received** — use
+  THAT email as the primary approval trigger (cleaner than diffing the Excel). Match each
+  confirmation to the specific dealership/feed, then advance that project. Fall back to the
+  Excel-pull (session expires in hours → if dead, one-tap **"log in so I can grab the ID"**) only
+  when a confirmation can't be matched. (Real input 2026-06-24: a 13-dealer group came in via
+  Fortellis as ONE email thread with many separate Fortellis links/confirmations.)
 - **DealerVault:** **data entry stays fully manual** (no bot in their portal). Only the **read** of
   the approved dealer ID is automated, same expired-session prompt as Fortellis. Plus the
   +3-business-day chase to the FOD whose admin hasn't approved yet.
