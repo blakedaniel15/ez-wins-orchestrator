@@ -282,21 +282,26 @@ missing-email → reach-back action and the missing-ID → internal-pull task.
 roster on the project record, with the correct reach-back vs internal-pull vs ignore action.
 
 ### Phase 5 — Integration approval automation (per DMS) + Playwright worker + list move
-**New.** Inbound approval detection per DMS, plus a Playwright worker that reuses saved
-authenticated sessions. On approval, **move the ClickUp task `901113435718` → `901105435045`**.
-- **Reynolds:** parse the inbound approval ZIP for the ID → dev task. Surface "sign the docs" as an
-  action when Blake's signature is needed (stays a human step by design).
-- **Tekion:** session stays live a while → near-autonomous subscription-ID pull off the approval email.
-- **Fortellis:** **a per-feed confirmation email is sent when the data feed is received** — use
-  THAT email as the primary approval trigger (cleaner than diffing the Excel). Match each
-  confirmation to the specific dealership/feed, then advance that project. Fall back to the
-  Excel-pull (session expires in hours → if dead, one-tap **"log in so I can grab the ID"**) only
-  when a confirmation can't be matched. (Real input 2026-06-24: a 13-dealer group came in via
-  Fortellis as ONE email thread with many separate Fortellis links/confirmations.)
-- **DealerVault:** **data entry stays fully manual** (no bot in their portal). Only the **read** of
-  the approved dealer ID is automated, same expired-session prompt as Fortellis. Plus the
-  +3-business-day chase to the FOD whose admin hasn't approved yet.
-**Done when:** an approval email for each DMS lands the ID on the project + dev task and moves the
+**New.** Inbound approval detection per DMS. On approval, **move the ClickUp task `901113435718` →
+`901105435045` (status Development)**. **Per-DMS trigger details + open artifacts: see
+`docs/superpowers/specs/2026-06-24-dms-approval-flows.md`.** Prefer a partner API/webhook where one
+exists over email parsing.
+- **Fortellis (CONFIRMED):** detect the `noreply@fortellis.io` / `EZ Wins Activation Details` email →
+  match the `Organization` field to the dealership → save the `Subscription ID` on the project.
+  One activation per store (a group sends many). EZ Wins always Cc'd.
+- **Tekion:** APC 2.0 gives partners a dashboard + **webhooks/API** + real-time onboarding
+  notifications — **prefer the APC API/webhook** to pull approval + subscription ID (cleaner than the
+  email). *Pending: confirm Blake's APC partner-account/API access, else a real approval email.*
+- **DealerVault:** sends a **"Feed Request Notification" email**; vendor verifies approval in the
+  **portal (feed shows "Active" in Store Summary)**; a **vendor API** also exists. Data entry stays
+  manual; the **read** of the approved dealer ID is automated (portal scrape on saved session, or
+  API), same expired-session prompt as Fortellis. Plus the +3-business-day chase to the FOD whose
+  admin hasn't approved. *Pending: a real notification email + whether the API is available.*
+- **Reynolds:** Blake signs the RCI docs (permanent manual step); the dealer admin approves in the
+  `my.reyrey.com` Interface Dashboard (within 30 days). Likely identifiers: Customer/Package # (store)
+  + `17310 RCI EZ Wins RO Pkg` (feed). *Pending: the confirmation artifact is UNVERIFIED — need a real
+  Reynolds approval email/file (the "ZIP" was a guess).*
+**Done when:** an approval signal for each DMS lands the ID on the project + dev task and moves the
 task to the working list automatically, or a single login prompt when a session is dead.
 
 ### Phase 6 — Delivery: "it's ready" → launch date → welcome emails
