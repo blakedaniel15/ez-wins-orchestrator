@@ -54,11 +54,26 @@ for each. (Agents' web tools were blocked; the web findings below were gathered 
   Vegas`), item **17310** (feed/package). Body of #4 gives the **preload/historical-file date**.
   Store on the project: `substate.reynolds_customer_no`, `reynolds_order_no`, `reynolds_item=17310`,
   `preload_file_date`.
-- **Automation:** detect #4 → match by Customer # (or dealer name) → save IDs → move ClickUp task to
-  Companies Inbound/Development. Detect #3 → OUTBOX sign action. Signing stays manual.
-- **Open gaps (confirming with Blake):** (a) is there a separate "dealer approved" email, or is
-  `- COMPLETED` the only post-signing confirmation? (b) Is the auto-ack's "installation confirmation
-  checklist" a separate email or = #3/#4? (c) per-store emails for a group (subjects suggest yes).
+- **The docs-ready (#3) attachment is the onboarding goldmine — VERIFIED.** Pulled the PDF off the
+  real `.eml` via Python's `email` module (Graph exposes the same via `/messages/{id}/attachments`,
+  base64 — the email assistant already does this). The **RCI-1 Order Form** PDF contains, fully
+  extractable by Claude: store DBA name (`Team Toyota`), legal name, **Reynolds Customer #**
+  (`7636220`), full address, item (`17310`), **PPSYSID/Store/Branch** (`713042043142954`/`02`/`01`),
+  EULA-signed date, End User Signatory, EZ Wins vendor # (`7510719`, constant). This is everything
+  needed to create the dealership + ClickUp task. **Blake currently feeds this PDF to a Claude skill
+  manually — automate it: detect #3 → pull PDF → extract → create/enrich dealership + task → OUTBOX
+  "sign the RCI-1".**
+- **Per-store keys:** Reynolds **Customer #** + **PPSYSID/Store/Branch** (exact; also the identifiers
+  the termination flow requires — offboarding is pre-wired).
+- **Automation:** detect #3 → pull+extract RCI-1 PDF → create/enrich dealership+task + OUTBOX sign.
+  Detect #4 (`- COMPLETED`) → save IDs + preload date → move ClickUp task to Companies
+  Inbound/Development. Signing stays manual.
+- **Resolved:** the `- COMPLETED` email **is** the dealer-approved signal (dealer approves → data
+  delivered same day → that email carries the delivery date). The auto-ack's "installation
+  confirmation checklist" is boilerplate, not a distinct artifact.
+- **Other Reynolds rounds to map (Blake adding .eml samples):** termination/cancellation, dealer
+  buy/sell auto-cancel (cancellation notice), and **order canceled at dealer end → EZ Wins must
+  follow up** (the decline/issue path). These are offboarding/error rounds, separate from onboarding.
 
 ---
 
