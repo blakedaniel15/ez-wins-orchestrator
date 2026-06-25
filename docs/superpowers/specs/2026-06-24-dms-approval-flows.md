@@ -30,27 +30,35 @@ for each. (Agents' web tools were blocked; the web findings below were gathered 
 
 ---
 
-## Reynolds & Reynolds — flow mapped; confirmation = GAP
+## Reynolds & Reynolds — CONFIRMED from real emails ✅ (2 minor gaps)
 
-- **Conduit:** `reynolds_rci`. RCI = Reynolds Certified Interface (vendor must be RCI-certified;
-  Reynolds audits/charges for access).
-- **Outbound (known):** EZ Wins emails an RCI order to **`RCI_Deployment@reyrey.com`**, product
-  **`17310 – RCI EZ Wins RO Pkg`**, with dealer name/address, End User Signatory, EULA date, and
-  Blake as the RCI-1 signatory. (`MOC-Onboarding-Form/app/api/submit/route.ts:216-224`.)
-- **Manual by design:** **Blake signs the RCI docs.** The dealer admin (with "Integration
-  Authorization Role") approves the request in their **Reynolds Interface Dashboard** at
-  `my.reyrey.com` (must be done within **30 days**). Feed provisions in ~2–3 business days.
-- **Confirmation (UNVERIFIED):** the plan assumes an "approval ZIP"; no real sample confirms this.
-  The official Reynolds Interface Dashboard guide (PDF in `MOC-Onboarding-Form/public/guides/`)
-  shows the dealer-side identifiers: **Customer/Package #** (store rooftop number), **Interface/Part
-  Description** (= the `17310 RCI EZ Wins RO Pkg` feed), EULA date, signatories; the Decision Log is
-  Excel-downloadable.
-- **Likely identifiers:** store = Reynolds Customer/Package #; feed = `17310` interface description.
-- **Web (2026-06):** RCI confirmed as the certified-interface program; **no public partner
-  webhook/API** for approval surfaced — so confirmation is likely email and/or the data simply
-  starting to flow.
-- **NEEDED FROM BLAKE:** a real Reynolds approval artifact — is it an email from `@reyrey.com`, a
-  `my.reyrey.com` portal notification, or a downloaded file/ZIP? What identifies the store + feed?
+- **Conduit:** `reynolds_rci`. RCI = Reynolds Certified Interface. **The whole chain is structured
+  emails from `RCI_Deployment@reyrey.com` — NOT a ZIP** (the earlier "approval ZIP" assumption was
+  wrong). Verified from 4 real `.eml` samples (gitignored, in `~/Projects`).
+- **The email chain:**
+  1. **Order (outbound):** `blake@ez-wins.com` → `rci_deployment@reyrey.com`, subject
+     `New Order 17310 – RCI EZ Wins RO Pkg` (dealer details + item 17310).
+  2. **Auto-ack:** Reynolds → you, subject `RCI Deployment E-Mail Confirmation` (autoresponder;
+     "installation confirmation checklist within 10 business days"). Low value.
+  3. **Docs ready to sign:** Reynolds → you, subject
+     `{order#}_RCI REYSIGN EZ Wins RO Pkg_{customer#}_{Dealer}` (no suffix) **with an attachment**
+     (the RCI-1; REYSIGN = Reynolds e-signature). → OUTBOX "sign the docs" action (Blake signs —
+     permanent manual step).
+  4. **COMPLETED:** Reynolds → you, subject `…_{Dealer} - COMPLETED`, body
+     *"Part 17310 - preload file was sent on {date}"*. → **feed received; advance the project.**
+- **Detection signature:** `From: RCI_Deployment@reyrey.com` + subject matching
+  `*_RCI REYSIGN EZ Wins RO Pkg_*`; ` - COMPLETED` suffix = done, attachment-present/no-suffix =
+  needs signing.
+- **Identifiers (parsed from the subject):** **order #** (e.g. `101261760`), **Reynolds Customer #**
+  (e.g. `7501973` = stable per-store key), **Dealership name** (e.g. `Vegas Auto Gallery Lotus Las
+  Vegas`), item **17310** (feed/package). Body of #4 gives the **preload/historical-file date**.
+  Store on the project: `substate.reynolds_customer_no`, `reynolds_order_no`, `reynolds_item=17310`,
+  `preload_file_date`.
+- **Automation:** detect #4 → match by Customer # (or dealer name) → save IDs → move ClickUp task to
+  Companies Inbound/Development. Detect #3 → OUTBOX sign action. Signing stays manual.
+- **Open gaps (confirming with Blake):** (a) is there a separate "dealer approved" email, or is
+  `- COMPLETED` the only post-signing confirmation? (b) Is the auto-ack's "installation confirmation
+  checklist" a separate email or = #3/#4? (c) per-store emails for a group (subjects suggest yes).
 
 ---
 
