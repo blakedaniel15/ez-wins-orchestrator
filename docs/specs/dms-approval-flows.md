@@ -110,17 +110,21 @@ invoices, re-certification/audit.
   `New Connection Request from {Dealer} for EZ Wins`. Body fields: **Dealer Name** (`Toyota
   Sunnyvale`), **Dealer Address**, Integration Requested (`EZ Wins`), Submission Date. "Next Steps:
   this request has been logged in the dealer dashboard and is awaiting your action."
-- **Crucial:** the email is a **trigger, NOT a data source** — it carries Dealer Name + Address but
-  **NOT the Tekion Dealer ID** (`companyname_1234_0`). That ID lives only in the APC dashboard.
-- **Automation = email-triggered browser scrape** (the onboarding skill's Path E, on the saved Tekion
-  session): email fires → match/create the dealership by name+address → drive `apc.tekioncloud.com`
-  dealer-dashboard (filter "Pending Onboarding") → scrape the **Tekion Dealer ID** + full address →
-  create the ClickUp Branch task. Session expired → one-tap "log in" prompt (same as Fortellis/
-  DealerVault). Store `substate.tekion_dealer_id`.
-- **Open (confirming with Blake):** (1) is there a *second* "integration established/active" email
-  after Blake acts, or is this Connection-Request email the only one? (2) On this email, does Blake
-  **approve/accept** in the dashboard, or just scrape the pending entry (no approval click)?
-  (3) confirmed the Dealer ID only comes from the dashboard, never the email.
+- **CONFIRMED behavior (Blake):** when this email arrives the **connection is already live** — no
+  approval click by EZ Wins; it just signals "go use it." The email carries Dealer Name + Address but
+  **NOT the Tekion Dealer ID** (`companyname_1234_0`); the ID lives only in the APC dashboard, and the
+  **devs** fetch it from the Tekion app themselves (if they even need it) and mark it onboarded.
+- **Automation:** detect the email → match/create the dealership by name+address → **create the
+  ClickUp Branch task from the email** (name+address is enough) → **send to Dev**. The orchestrator
+  does NOT need to scrape the Dealer ID for this path (devs handle the Tekion-app side). The browser
+  scrape (onboarding skill's Path E on the saved session) remains the **proactive** way to pull
+  dealers from the APC dashboard when there's no email; optional Dealer-ID enrichment.
+- **Withdrawal email (CONFIRMED, real `.eml`):** `From: noreply-apc@tekioncloud.com`, subject
+  `{Dealer} has withdrawn connection request for EZ Wins`, body "No further action is required."
+  → **do nothing** (if a task/project was already created for that dealer, close it as withdrawn).
+  Covers the "accidental access then immediate cancel" case.
+- **Two Tekion emails total**, both `noreply-apc@tekioncloud.com`: New Connection Request (onboard) /
+  Withdrawn (ignore). No subscription-ID-in-email; no API; no approval step.
 - Repo bug: `tekion-approval-guide.pdf` referenced but missing in MOC-Onboarding-Form.
 
 ---
@@ -148,21 +152,23 @@ invoices, re-certification/audit.
 
 ---
 
-## Consolidated: what to get from Blake
+## Status of the 4 DMS deep-dives
 
-| DMS | Forward this | Plus answer |
+| DMS | Status | Trigger / mechanism |
 |---|---|---|
-| Reynolds | a real approval artifact (email from `@reyrey.com`? portal notice? ZIP file?) | what identifies store + feed; is EZ Wins notified or only the dealer admin? |
-| Tekion | APC partner-account/API access **or** a real approval email | do you have `apc.tekioncloud.com` partner API creds? |
-| DealerVault | a real "Feed Request Notification" / approval email | do you have a DealerVault vendor API? where do you read the approved dealer ID? |
+| **Fortellis** | ✅ confirmed | activation email (`Organization` + `Subscription ID`) |
+| **Reynolds** | ✅ confirmed | `RCI_Deployment@reyrey.com` structured subjects + RCI-1 PDF; full on/offboarding |
+| **Tekion** | ✅ confirmed | `noreply-apc@tekioncloud.com` connection-request email (live; create task → Dev) / withdrawal = ignore; Dealer ID from dashboard scrape |
+| **DealerVault** | ⏳ next | "Feed Request Notification" email + portal "Active" status; need a real sample |
 
 ## Design implication
 
-Where a **partner API/webhook exists (Tekion APC, possibly DealerVault), prefer it over email
-parsing** — it's more reliable and gives the IDs directly. Email parsing (Fortellis) and
-portal-scrape-on-saved-session (DealerVault read, possibly Reynolds) are the fallbacks. All paths
-converge on the same Phase 5 outcome: match to the dealership → save the feed ID on the project →
-move the ClickUp task to Companies Inbound/Development → no-match routes to the OUTBOX.
+Each DMS converges on the same Phase-5 outcome: **match to the dealership → save the platform ID on
+the project → create/advance the ClickUp Branch task → send to Dev**; no-match or expired-session
+routes to the OUTBOX. Mechanisms differ: email-carries-ID (Fortellis, Reynolds), email-triggers-scrape
+(Tekion — ID from dashboard), email+portal-read (DealerVault). No EZ-Wins-facing partner API exists for
+any of them (Tekion APC has one but EZ Wins isn't granted it) — so it's email + saved-session browser
+automation throughout.
 
 ## Sources (web, 2026-06)
 - Tekion APC: https://tekion.com/products/apc · https://apc.tekioncloud.com/user/home · https://tekion.com/blog/a-new-era-of-dealer-controlled-tech-automotive-partner-cloud-2-grows-40x-since-launch
