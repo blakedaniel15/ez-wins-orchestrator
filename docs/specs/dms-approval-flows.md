@@ -100,26 +100,28 @@ invoices, re-certification/audit.
 
 ---
 
-## Tekion — flow mapped; likely API/webhook (better than email)
+## Tekion — CONFIRMED: email trigger + browser scrape (no API) ✅
 
-- **Conduit:** `tekion` (direct partner; no middleman).
+- **Conduit:** `tekion` (direct partner). **No partner API available to EZ Wins — browser scrape only.**
 - **Outbound (known, exact text in repo):** EZ Wins emails the dealer/IT contact the **Integration
   Hub** steps: App Grid → Apps → APC → Integration Hub → search "EZ Wins" → **Request Connection** →
-  accept Data Permissions & T&C. The **dealer** initiates the connection request.
-  (`MOC-Onboarding-Form/app/api/submit/route.ts:277-288`; `email_assistant_prompt.md:606-627`.)
-- **Confirmation (NEW — web 2026-06):** Tekion **Automotive Partner Cloud (APC) 2.0** gives
-  technology partners a **dashboard + real-time notifications when a dealer initiates onboarding**,
-  and supports **APIs, FTP feeds, and webhooks**. So the approval + subscription ID are most likely
-  available via the **partner dashboard/API/webhook** (`apc.tekioncloud.com`), NOT only an email.
-  This reframes the plan's "pull the subscription-ID off the approval email" → **prefer the APC
-  API/webhook**.
-- **Likely identifiers:** store = Tekion dealer/tenant; feed = subscription/connection ID →
-  `project.substate.tekion_subscription_id`.
-- **Automation:** potentially the cleanest of all — a webhook/API poll on the APC partner account
-  could detect approval + ID with no email parsing.
-- **NEEDED FROM BLAKE:** (1) do you have an **APC partner account** at `apc.tekioncloud.com` with API
-  credentials? (2) Failing that, forward a real Tekion approval email. Either nails the trigger.
-- Repo bug: `tekion-approval-guide.pdf` is referenced but missing (guide silently never attaches).
+  accept Data Permissions & T&C. The **dealer** initiates. (`MOC-Onboarding-Form/.../route.ts:277-288`.)
+- **Trigger email (CONFIRMED from real `.eml`):** `From: noreply-apc@tekioncloud.com`, subject
+  `New Connection Request from {Dealer} for EZ Wins`. Body fields: **Dealer Name** (`Toyota
+  Sunnyvale`), **Dealer Address**, Integration Requested (`EZ Wins`), Submission Date. "Next Steps:
+  this request has been logged in the dealer dashboard and is awaiting your action."
+- **Crucial:** the email is a **trigger, NOT a data source** — it carries Dealer Name + Address but
+  **NOT the Tekion Dealer ID** (`companyname_1234_0`). That ID lives only in the APC dashboard.
+- **Automation = email-triggered browser scrape** (the onboarding skill's Path E, on the saved Tekion
+  session): email fires → match/create the dealership by name+address → drive `apc.tekioncloud.com`
+  dealer-dashboard (filter "Pending Onboarding") → scrape the **Tekion Dealer ID** + full address →
+  create the ClickUp Branch task. Session expired → one-tap "log in" prompt (same as Fortellis/
+  DealerVault). Store `substate.tekion_dealer_id`.
+- **Open (confirming with Blake):** (1) is there a *second* "integration established/active" email
+  after Blake acts, or is this Connection-Request email the only one? (2) On this email, does Blake
+  **approve/accept** in the dashboard, or just scrape the pending entry (no approval click)?
+  (3) confirmed the Dealer ID only comes from the dashboard, never the email.
+- Repo bug: `tekion-approval-guide.pdf` referenced but missing in MOC-Onboarding-Form.
 
 ---
 
