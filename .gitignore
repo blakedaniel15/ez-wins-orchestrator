@@ -6,4 +6,9 @@ node_modules/
 .vercel
 .DS_Store
 next-env.d.ts
+
+# Real customer samples & runtime data (reference only, never commit)
 *.eml
+*.pdf
+*.skill
+docs/reference/onboarding-skill/memory.json

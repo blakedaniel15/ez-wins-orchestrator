@@ -8,8 +8,9 @@ Phase 0 is the skeleton: ID minting, the project registry, the three cross-syste
 wirings, and a password-gated internal page that doubles as the manual "New Project"
 tool and the acceptance-test harness. No AI, no automation yet — those are later phases.
 
-See `Phase-0-Orchestrator-ClaudeCode-Brief.md` for scope and
-`EZ-Wins-Automation-Execution-Plan.md` for the full roadmap.
+See `docs/plan/phase-0-brief.md` for scope and `docs/plan/execution-plan.md` for the full
+roadmap. `docs/` is organized as: `plan/` (roadmap), `specs/` (designs), `plans/` (implementation
+plans), `reference/` (the onboarding skill + real DMS email samples).
 
 ## What it does (Phase 0)
 

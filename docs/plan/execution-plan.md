@@ -261,8 +261,19 @@ attach the MOC rep and contacts from the email, mint/attach the project ID, crea
 on `901113435718` (Feed Approval Pending) stamped with the ID. Reconcile the onboarding form so
 form-originated onboardings receive the same project ID. The attached MOC rep drives the region
 connections and the later "it's ready" notice.
-**Done when:** an onboarding email produces a tracked project, a portal pipeline dealer, and a
-linked ClickUp task with the MOC rep attached, with zero manual entry.
+**Blueprint — absorb the existing onboarding skill** (`docs/reference/onboarding-skill/`): it already
+encodes the full task-creation logic for all sources (Fortellis CSV, **Reynolds RCI-1 PDF**,
+DealerVault paste, Tekion paste, Tekion APC browser scrape) — the exact **dev-team description format**
+(Dealership/Brand/Owner/Address, API Platform, Door Rate `$225`, DMS, per-platform IDs like
+`Reynolds PPSYSID` + `Reynolds Store Code` / `Fortellis Subscription ID` / `Tekion Dealer ID` /
+`DealerVault ID`, `Fluids Provider: MOC Products`), the `task_type: "Branch"` auto-subtask trigger on
+list `901105435045`, the MOC Region custom field + option IDs, brand/group/region detection, `seen_orgs`/
+`seen_groups` dedup memory, and the MOC-Users + EZ-Wins-group comments. The orchestrator replaces the
+manual "drop a PDF/CSV into the skill" step: detect → extract (Claude reads the PDF/CSV/paste) →
+human-review in the OUTBOX → create the Branch task. Note the **EZ Wins group naming rule** (omit a
+trailing "Group"; the platform appends it).
+**Done when:** an onboarding email/PDF produces a tracked project, a portal pipeline dealer, and a
+linked ClickUp Branch task (structured description, MOC Region, MOC-Users comment) with zero manual entry.
 
 ### Phase 3 — Support automation (NET-NEW follow-up)
 **New.** On a detected support request: draft the confirmation reply (as today), create the ClickUp
@@ -284,7 +295,7 @@ roster on the project record, with the correct reach-back vs internal-pull vs ig
 ### Phase 5 — Integration approval automation (per DMS) + Playwright worker + list move
 **New.** Inbound approval detection per DMS. On approval, **move the ClickUp task `901113435718` →
 `901105435045` (status Development)**. **Per-DMS trigger details + open artifacts: see
-`docs/superpowers/specs/2026-06-24-dms-approval-flows.md`.** Prefer a partner API/webhook where one
+`docs/specs/dms-approval-flows.md`.** Prefer a partner API/webhook where one
 exists over email parsing.
 - **Fortellis (CONFIRMED):** detect the `noreply@fortellis.io` / `EZ Wins Activation Details` email →
   match the `Organization` field to the dealership → save the `Subscription ID` on the project.
