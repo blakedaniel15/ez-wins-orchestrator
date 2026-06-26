@@ -1,90 +1,74 @@
 # EZ Wins Orchestrator — Status & Handoff
 
-**Last updated:** 2026-06-24
-**Current phase:** Phase 0 — ✅ **COMPLETE & signed off** (acceptance test 5/5 passing). Next up: Phase 1.
+**Last updated:** 2026-06-26
+**Where we are:** Phase 0 ✅ done & deployed. Entity-model design (Phase 0.5) ✅ specced + planned,
+ready to build. DMS deep-dives in progress (Fortellis + Reynolds ✅ confirmed; Tekion + DealerVault
+next). **Next build = Phase 0.5.**
+
+Docs are organized under `docs/` — start with `docs/README.md`, then `docs/plan/execution-plan.md`.
 
 ---
 
-## Phase 0 — DONE
+## Phase 0 — DONE ✅
 
-Built, on GitHub `main`, **deployed green on Vercel**, all env vars provisioned, and the full
-acceptance test **passed end-to-end against real production systems**:
+Deployed green on Vercel, all env vars provisioned, acceptance test **5/5 passing** end-to-end against
+real systems: mint typed ID → write/read on a ClickUp task (`868k1qgvn`) + portal dealer
+(`d_1780607333618_egnvk`, Steve Hahn) → tag an Outlook thread (10 msgs) → reverse-lookup thread→project.
+Test row: `ONB-2026-0001`.
 
-| # | Acceptance step | Status |
-|---|---|---|
-| 1 | Mint a typed project ID | ✅ minted `ONB-2026-0001` (Steve Hahn Volkswagen, Mercedes, Kia) |
-| 2 | Write ID to a ClickUp task + read back | ✅ task `868k1qgvn` |
-| 3 | Tag an Outlook thread + store conversationId | ✅ tagged 10 messages `EZW-ONB-2026-0001` |
-| 4 | Reverse-lookup project from conversationId | ✅ thread → `ONB-2026-0001` |
-| 5 | Write ID to a portal dealer + read back | ✅ dealer `d_1780607333618_egnvk` (Steve Hahn) |
-
-Note: the reverse-lookup field needs the thread's **conversationId** (long Graph string), not the
-project ID — a UI polish (auto-fill from the tagged thread) is an easy future tweak.
-
----
-
-## What's live
-
-- **Repo:** `github.com/blakedaniel15/ez-wins-orchestrator`, branch `main` (its own git repo).
-- **Vercel:** project under Blake's personal account (NOT the EZ Wins team — so Claude can't read
-  its build logs directly; paste errors or transfer to the team to enable monitoring).
-- **Neon:** a **dedicated** DB (separate from the portal). Schema run: `project` + `project_counter`
-  tables exist (`neon-schema.sql`).
-- **Upstash Redis:** a **dedicated** instance (separate from other apps — avoids `admin_session:*`
-  and future `followup:*` key collisions).
-
-### Env vars provisioned (Vercel)
-- Neon: `DATABASE_URL` (+ ~14 auto-added Neon extras, unused/harmless)
-- Redis: `KV_REST_API_URL`, `KV_REST_API_TOKEN`
-- `ADMIN_PASSWORD`
-- ClickUp: `CLICKUP_API_TOKEN`, `CLICKUP_PROJECT_ID_FIELD_UUID=a902e02d-f4cf-4751-ae54-c1f101962ce9`
-- MS Graph: `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET` (new secret, saved in 1Password),
-  `MS_USER_EMAIL`
-- `PORTAL_BASE_URL=https://hub.ez-wins.com` (verified: 200, 237 dealers, `projectId` field live)
-- The four `CLICKUP_LIST_*` are optional in Phase 0 (not used by any Phase-0 code path).
-
-### Test handles
-- ClickUp task: `868k1qgvn` ("DealerTrack feed approval: Steve Hahn VW, Mercedes, Kia")
-- Portal dealer: `seed_0` (Toyota Walnut Creek), `projectId` currently empty
+### Live infra
+- **Repo:** `github.com/blakedaniel15/ez-wins-orchestrator`, branch `main`.
+- **Vercel:** under Blake's **personal** account (not the EZ Wins team) — Claude can't read its build
+  logs; paste errors or transfer to the team to enable monitoring.
+- **Neon:** dedicated DB (separate from portal). **Schema is still the Phase-0 `project` +
+  `project_counter` only — the Phase 0.5 migration has NOT been run yet.**
+- **Upstash Redis:** dedicated instance.
+- **Env vars (Vercel):** `DATABASE_URL`, `KV_REST_API_URL/TOKEN`, `ADMIN_PASSWORD`, `CLICKUP_API_TOKEN`,
+  `CLICKUP_PROJECT_ID_FIELD_UUID=a902e02d-f4cf-4751-ae54-c1f101962ce9`, MS Graph (`MS_*`),
+  `PORTAL_BASE_URL=https://hub.ez-wins.com`.
 
 ---
 
-## Changes made this session
+## Designed & planned (not yet built)
 
-**Plan docs** (rewritten): reframed to an **email-thread spine, type-agnostic** (ONB/SUP/WUP/INV
-all mint IDs, born from the Outlook thread = idempotency key); generalized cadence; net-new support
-follow-up; warranty letter-guard (Phase 7); four ClickUp lists as stage buckets; manual
-project-creation escape hatch.
+- **Phase 0.5 — group → dealership → project entity model.** Spec: `docs/specs/group-dealership-
+  entity-model.md`. Implementation plan (7 tasks): `docs/plans/phase-0.5-entity-model.md`. This is the
+  next build — it migrates the flat Phase-0 `project` table into the 3-tier persistent model
+  (dealership = first-class memory anchor; projects are time-bound engagements that end).
 
-**Phase 0 code** (TypeScript, Next 14 App Router): `lib/` (db, redis, security, ids, projects,
-graph, clickup, portal), `app/api/` (login, session, projects, wire/{portal,clickup,outlook}),
-and the internal page (login + manual New-Project tool + 5-step acceptance harness).
+## DMS approval flows — `docs/specs/dms-approval-flows.md`
 
-**Fixes during bring-up:** paste-safe schema comments; `.gitignore` keeps `.env.example`;
-mint errors now surface (route try/catch + page error display); Graph `$search` for subject lookup.
+- **Fortellis ✅ CONFIRMED** (real email): `noreply@fortellis.io` / "EZ Wins Activation Details" →
+  `Organization` (store) + `Subscription ID` (feed).
+- **Reynolds ✅ CONFIRMED** (real emails): all from `RCI_Deployment@reyrey.com`, structured subjects
+  keyed on **Customer #** / **PPSYSID**. Full lifecycle mapped: onboarding (order → ack →
+  docs-ready+**RCI-1 PDF** → `- COMPLETED` = approved+data-delivered) AND offboarding
+  (`- CANCELLED` decline, termination, BUY/SELL). **Proved we can pull the RCI-1 PDF off the email and
+  extract every field** (Customer #, PPSYSID/Store/Branch, address, EULA date, signatory).
+- **Tekion — next.** APC 2.0 likely offers a partner **API/webhook** (cleaner than email). Open: does
+  Blake have an `apc.tekioncloud.com` partner account w/ API access?
+- **DealerVault — after Tekion.** "Feed Request Notification" email + portal "Active" status + vendor
+  API. Open: real notification email + API availability.
 
-**Infra/git:** gave the orchestrator its own git repo; removed a stray 2.2GB git repo at
-`/Users/blakedaniel/.git` (was catching un-initialized folders — a secrets hazard).
+## Onboarding skill absorbed → Phase 2 blueprint
 
-**Portal (Blake did these):** added `project_id` column wired through all 4 places + an Edit-modal
-input. ClickUp: created the `project_id` text field at the Space level.
+`docs/reference/onboarding-skill/` (the real EZ-Wins skill). Encodes task-creation for all sources
+(Fortellis CSV, Reynolds RCI-1 PDF, DealerVault paste, Tekion paste, **Tekion APC browser scrape**):
+the dev-team **description format**, `task_type:"Branch"` auto-subtask on list `901105435045`, MOC
+Region field IDs, brand/group/region detection, `seen_orgs`/`seen_groups` dedup, MOC-Users + group
+comments, EZ-Wins group-naming rule. The orchestrator absorbs this as Phase 2.
 
 ---
 
 ## Open items / next actions
 
-1. **Finish acceptance test** — steps 2–5 above.
-2. **DMS field in portal** (Blake is doing the edit, not Claude). Decided it's **additive** — the
-   portal already has a per-dealer `dms` field, and the orchestrator's `project` already carries
-   `dms` + `conduit` (the DealerVault case is exactly why they're separate: `dms`=underlying,
-   `conduit=dealervault`). **Awaiting Blake's answer:** is he (a) using the existing `dms` field
-   (no schema change), or (b) adding a new column (then wire all 4 places + `alter table` first,
-   like `project_id`)?
-3. **Phase 1 — Comms arm** (next phase): port the email assistant's sweep→classify→draft into the
-   orchestrator, generalize cadence to per-type tracks, build the OUTBOX/action queue, then
-   **retire the email assistant fully** at cutover.
+1. **Tekion deep-dive** — confirm APC partner API access, else get a real approval email. Then DealerVault.
+2. **Build Phase 0.5** — run `docs/plans/phase-0.5-entity-model.md` (Blake runs the migration SQL in Neon).
+3. **Minor, deferred:** Reynolds package-conversion / billing / re-cert rounds; reverse-lookup UI
+   auto-fill; the `tekion-approval-guide.pdf` missing-file bug in MOC-Onboarding-Form.
 
 ## Decisions locked
-- TypeScript. · Blake owns all portal-repo edits. · Separate Neon DB + separate Redis. · Four
-  ClickUp lists kept separate as stages (orchestrator moves tasks between them). · Warranty letters
-  stay human-reviewed forever. · Work stays inside `~/Projects`; commit to `main`.
+- TypeScript · Blake owns all portal edits · separate Neon DB + Redis · four ClickUp lists as stages ·
+  warranty letters human-reviewed forever · dealership = first-class persistent entity; projects end ·
+  OEM = `oems[]` attribute · prefer partner API/webhook over email parsing where available ·
+  work stays inside `~/Projects`, commit to `main`.
