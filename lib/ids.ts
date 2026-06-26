@@ -33,3 +33,17 @@ export async function mintProjectId(type: ProjectType): Promise<string> {
   const n = rows[0].n;
   return `${prefix}-${year}-${String(n).padStart(4, '0')}`;
 }
+
+// Persistent-entity IDs: no year, zero-padded to 6. Reuses the atomic counter.
+async function mintEntityId(prefix: 'GRP' | 'DLR'): Promise<string> {
+  const rows = (await sql`
+    insert into project_counter (type_year, n)
+    values (${prefix}, 1)
+    on conflict (type_year) do update set n = project_counter.n + 1
+    returning n
+  `) as { n: number }[];
+  return `${prefix}-${String(rows[0].n).padStart(6, '0')}`;
+}
+
+export const mintGroupId = () => mintEntityId('GRP');
+export const mintDealershipId = () => mintEntityId('DLR');
