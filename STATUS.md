@@ -1,9 +1,9 @@
 # EZ Wins Orchestrator — Status & Handoff
 
 **Last updated:** 2026-06-26
-**Where we are:** Phase 0 ✅ done & deployed. Entity-model design (Phase 0.5) ✅ specced + planned,
-ready to build. DMS deep-dives in progress (Fortellis + Reynolds ✅ confirmed; Tekion + DealerVault
-next). **Next build = Phase 0.5.**
+**Where we are:** Phase 0 ✅ & Phase 0.5 ✅ both built, deployed green, and verified (group →
+dealership → project working end-to-end; migration run; `GRP-000001`/`DLR-000002`/`ONB-2026-0002`
+minted on the live page). All 4 DMS approval flows ✅ mapped. **Next build = Phase 1 (comms arm).**
 
 Docs are organized under `docs/` — start with `docs/README.md`, then `docs/plan/execution-plan.md`.
 
@@ -29,12 +29,12 @@ Test row: `ONB-2026-0001`.
 
 ---
 
-## Designed & planned (not yet built)
+## Built so far
 
-- **Phase 0.5 — group → dealership → project entity model.** Spec: `docs/specs/group-dealership-
-  entity-model.md`. Implementation plan (7 tasks): `docs/plans/phase-0.5-entity-model.md`. This is the
-  next build — it migrates the flat Phase-0 `project` table into the 3-tier persistent model
-  (dealership = first-class memory anchor; projects are time-bound engagements that end).
+- **Phase 0** — spine: typed ID minting + project↔portal/ClickUp/Outlook wiring + acceptance page.
+- **Phase 0.5 ✅** — group → dealership → project entity model (dealership = first-class memory
+  anchor; projects end). Spec: `docs/specs/group-dealership-entity-model.md`; plan:
+  `docs/plans/phase-0.5-entity-model.md`. Live & verified.
 
 ## DMS approval flows — `docs/specs/dms-approval-flows.md`
 
