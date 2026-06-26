@@ -71,9 +71,32 @@ for each. (Agents' web tools were blocked; the web findings below were gathered 
 - **Resolved:** the `- COMPLETED` email **is** the dealer-approved signal (dealer approves → data
   delivered same day → that email carries the delivery date). The auto-ack's "installation
   confirmation checklist" is boilerplate, not a distinct artifact.
-- **Other Reynolds rounds to map (Blake adding .eml samples):** termination/cancellation, dealer
-  buy/sell auto-cancel (cancellation notice), and **order canceled at dealer end → EZ Wins must
-  follow up** (the decline/issue path). These are offboarding/error rounds, separate from onboarding.
+### Reynolds offboarding / change rounds — CONFIRMED from real emails ✅
+
+All from `RCI_Deployment@reyrey.com`, keyed on **Customer #** / **PPSYSID** (captured at onboarding
+from the RCI-1 PDF → every event auto-matches the dealership).
+
+- **Decline (dealer rejected the order):** subject `{order#}_RCI REYSIGN EZ Wins RO Pkg_{customer#}_
+  {Dealer} - CANCELLED`; body: *"This order has been cancelled by {Dealer}. Decline Reason Given:
+  {reason}. Product: 17310 …"* (e.g. reason "Gord is unaware of this request"). → reopen/flag the
+  project; OUTBOX **"follow up — order declined: {reason}"** (re-educate the dealer + resubmit).
+- **Termination (EZ Wins-initiated churn):** Blake emails `RCI_Deployment` "Termination Request -
+  {dealers}" listing each store's **PPSYS/Store/Branch** number (e.g. Seattle Jeep
+  `5567913535144260201`) + "cancel by end of month." A human RCI Coordinator replies confirming
+  **Billing Termination Date + Data Termination Date** (+ a screenshot). → OUTBOX draft the
+  termination email (pre-filled from stored PPSYSID/Store/Branch); on the confirm reply, record the
+  dates and mark the dealership inactive/churned.
+- **Buy/Sell (auto-termination + re-enroll lead):** subject `BUY/SELL - {oldCustomer#}, {Dealer}`;
+  body: *"A billing and data termination has been submitted for {Dealer} (Customer # {old}, PPSYS
+  {old}, Store/Branch)… If you would like to enroll the buying dealership (Customer # {new}, PPSYS
+  {new}…), submit an enrollment request with an updated EULA date."* → mark old dealership churned
+  (auto-terminated by Reynolds); OUTBOX **"buyer {newCustomer#} available — re-enroll?"** → if yes,
+  submit a new 17310 order for the new Customer #. (A churn AND a fresh onboarding lead in one.)
+
+**Detection (all rounds):** `From: RCI_Deployment@reyrey.com`; route by subject — `- COMPLETED` /
+`- CANCELLED` suffix, `BUY/SELL -` prefix, or a "Termination Request" reply thread. Match by
+Customer #/PPSYSID. Secondary/minor rounds not yet sampled: package conversion, Reynolds billing
+invoices, re-certification/audit.
 
 ---
 
