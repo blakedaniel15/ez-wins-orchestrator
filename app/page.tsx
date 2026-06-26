@@ -100,15 +100,13 @@ export default function Page() {
     }
   }
 
-  if (authed === null) {
-    return <div style={S.wrap}>Loading…</div>;
-  }
+  if (authed === null) return <div style={S.wrap}>Loading…</div>;
 
   if (!authed) {
     return (
       <div style={S.wrap}>
         <h1 style={S.h1}>EZ Wins Orchestrator</h1>
-        <p style={S.sub}>Phase 0 — internal. Enter the admin password.</p>
+        <p style={S.sub}>Phase 0.5 — internal. Enter the admin password.</p>
         <div style={S.card}>
           <label style={S.label}>Admin password</label>
           <input
@@ -119,9 +117,7 @@ export default function Page() {
             onKeyDown={(e) => e.key === 'Enter' && login()}
           />
           <div style={{ marginTop: 14 }}>
-            <button style={S.btn} onClick={login}>
-              Sign in
-            </button>
+            <button style={S.btn} onClick={login}>Sign in</button>
           </div>
           {loginErr && <p style={{ color: '#e5564b', fontSize: 13 }}>{loginErr}</p>}
         </div>
@@ -133,27 +129,36 @@ export default function Page() {
 }
 
 function Dashboard({ onLogout }: { onLogout: () => void }) {
-  // create form
+  // entities
+  const [groups, setGroups] = useState<any[]>([]);
+  const [dealerships, setDealerships] = useState<any[]>([]);
+  const [groupName, setGroupName] = useState('');
+  const [dlrName, setDlrName] = useState('');
+  const [dlrGroupId, setDlrGroupId] = useState('');
+  const [dlrDms, setDlrDms] = useState('');
+  const [dlrConduit, setDlrConduit] = useState('');
+  const [dlrOems, setDlrOems] = useState('');
+  const [dlrPortalId, setDlrPortalId] = useState('');
+
+  // project create
   const [type, setType] = useState('onboarding');
-  const [dealerName, setDealerName] = useState('');
-  const [dms, setDms] = useState('');
-  const [conduit, setConduit] = useState('');
+  const [projDealershipId, setProjDealershipId] = useState('');
   const [createMsg, setCreateMsg] = useState('');
   const [dupe, setDupe] = useState<any[] | null>(null);
   const [projects, setProjects] = useState<any[]>([]);
 
-  // acceptance runner
+  // acceptance wiring
   const [projectId, setProjectId] = useState('');
   const [dealerId, setDealerId] = useState('');
   const [taskId, setTaskId] = useState('');
   const [conversationId, setConversationId] = useState('');
   const [subjectQ, setSubjectQ] = useState('');
   const [threads, setThreads] = useState<any[]>([]);
+  const [chain, setChain] = useState<any | null>(null);
   const [steps, setSteps] = useState<Record<string, StepState>>({
     portal: { status: 'idle' },
     clickup: { status: 'idle' },
     outlook: { status: 'idle' },
-    lookup: { status: 'idle' },
   });
 
   function setStep(k: string, s: StepState) {
@@ -164,26 +169,65 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     const r = await fetch('/api/projects').then((x) => x.json());
     if (r.ok) setProjects(r.projects || []);
   }
+  async function loadEntities() {
+    const [g, d] = await Promise.all([
+      fetch('/api/groups').then((x) => x.json()),
+      fetch('/api/dealerships').then((x) => x.json()),
+    ]);
+    if (g.ok) setGroups(g.groups || []);
+    if (d.ok) setDealerships(d.dealerships || []);
+  }
   useEffect(() => {
     loadProjects();
+    loadEntities();
   }, []);
+
+  async function createGroupFn() {
+    const r = await fetch('/api/groups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: groupName }),
+    }).then((x) => x.json());
+    if (r.ok) {
+      setGroupName('');
+      loadEntities();
+    }
+  }
+
+  async function createDealershipFn() {
+    const oems = dlrOems.split(',').map((s) => s.trim()).filter(Boolean);
+    const r = await fetch('/api/dealerships', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: dlrName, group_id: dlrGroupId || null, dms: dlrDms || null,
+        conduit: dlrConduit || null, oems, portal_dealer_id: dlrPortalId || null,
+      }),
+    }).then((x) => x.json());
+    if (r.ok) {
+      setDlrName(''); setDlrDms(''); setDlrConduit(''); setDlrOems(''); setDlrPortalId('');
+      setProjDealershipId(r.dealership.id);
+      loadEntities();
+    }
+  }
 
   async function createProject(force = false) {
     setCreateMsg('Minting…');
     setDupe(null);
+    if (!projDealershipId) {
+      setCreateMsg('✗ Pick a dealership first.');
+      return;
+    }
     try {
       const res = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type, dealer_name: dealerName || null, dms: dms || null, conduit: conduit || null, force }),
+        body: JSON.stringify({ type, dealership_id: projDealershipId, force }),
       });
       const j = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
       if (j.ok) {
         setCreateMsg(`✓ Minted ${j.project.id}`);
         setProjectId(j.project.id);
-        setDealerName('');
-        setDms('');
-        setConduit('');
         loadProjects();
       } else if (j.duplicate) {
         setCreateMsg('');
@@ -229,14 +273,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     else setStep('outlook', { status: 'fail', msg: r.error });
   }
 
-  async function lookupByConversation() {
-    setStep('lookup', { status: 'running' });
-    const r = await fetch(`/api/projects?conversationId=${encodeURIComponent(conversationId)}`).then((x) => x.json());
-    if (r.ok && r.project) {
-      setStep('lookup', { status: 'ok', msg: `Found ${r.project.id} (${r.project.type})` });
-    } else {
-      setStep('lookup', { status: 'fail', msg: 'No project linked to that conversationId.' });
-    }
+  async function resolveChain() {
+    const r = await fetch(`/api/resolve?conversationId=${encodeURIComponent(conversationId)}`).then((x) => x.json());
+    setChain(r.ok ? r : { kind: 'error', error: r.error });
   }
 
   async function logout() {
@@ -249,61 +288,100 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h1 style={S.h1}>EZ Wins Orchestrator</h1>
-          <p style={S.sub}>Phase 0 — project registry + cross-system wiring</p>
+          <p style={S.sub}>Phase 0.5 — group → dealership → project</p>
         </div>
-        <button style={S.btnGhost} onClick={logout}>
-          Sign out
-        </button>
+        <button style={S.btnGhost} onClick={logout}>Sign out</button>
       </div>
 
-      {/* ── Create ─────────────────────────────────────────── */}
+      {/* ── A · Groups ─────────────────────────────────────── */}
       <div style={S.card}>
-        <h2 style={S.h2}>1 · Create a project (mint an ID)</h2>
+        <h2 style={S.h2}>A · Dealer groups</h2>
+        <div style={S.row}>
+          <div style={{ flex: '1 1 260px' }}>
+            <label style={S.label}>Group name</label>
+            <input style={S.input} value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="e.g. Phil Long" />
+          </div>
+          <button style={S.btn} onClick={createGroupFn}>Create group</button>
+        </div>
+        {groups.length > 0 && (
+          <div style={{ marginTop: 12, ...S.mono, fontSize: 13, lineHeight: 1.7 }}>
+            {groups.map((g) => (
+              <div key={g.id} style={{ cursor: 'pointer' }} onClick={() => setDlrGroupId(g.id)}>
+                <span style={{ color: '#6ea8fe' }}>{g.id}</span> {g.name}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── B · Dealerships ────────────────────────────────── */}
+      <div style={S.card}>
+        <h2 style={S.h2}>B · Dealerships (the first-class unit)</h2>
+        <div style={S.row}>
+          <div style={{ flex: '1 1 220px' }}>
+            <label style={S.label}>Name</label>
+            <input style={S.input} value={dlrName} onChange={(e) => setDlrName(e.target.value)} placeholder="Phil Long Hyundai of Chapel Hills" />
+          </div>
+          <div style={{ flex: '1 1 160px' }}>
+            <label style={S.label}>Group ID (optional)</label>
+            <input style={{ ...S.input, ...S.mono }} value={dlrGroupId} onChange={(e) => setDlrGroupId(e.target.value)} placeholder="GRP-000007" />
+          </div>
+          <div style={{ flex: '1 1 110px' }}>
+            <label style={S.label}>DMS</label>
+            <input style={S.input} value={dlrDms} onChange={(e) => setDlrDms(e.target.value)} placeholder="CDK" />
+          </div>
+          <div style={{ flex: '1 1 110px' }}>
+            <label style={S.label}>Conduit</label>
+            <input style={S.input} value={dlrConduit} onChange={(e) => setDlrConduit(e.target.value)} placeholder="fortellis" />
+          </div>
+          <div style={{ flex: '1 1 160px' }}>
+            <label style={S.label}>OEMs (comma-sep)</label>
+            <input style={S.input} value={dlrOems} onChange={(e) => setDlrOems(e.target.value)} placeholder="Hyundai" />
+          </div>
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={S.label}>Portal dealer ID</label>
+            <input style={{ ...S.input, ...S.mono }} value={dlrPortalId} onChange={(e) => setDlrPortalId(e.target.value)} placeholder="seed_0" />
+          </div>
+          <button style={S.btn} onClick={createDealershipFn}>Create dealership</button>
+        </div>
+        {dealerships.length > 0 && (
+          <div style={{ marginTop: 12, ...S.mono, fontSize: 13, lineHeight: 1.7 }}>
+            {dealerships.slice(0, 10).map((d) => (
+              <div key={d.id} style={{ cursor: 'pointer' }} onClick={() => setProjDealershipId(d.id)}>
+                <span style={{ color: '#37c871' }}>{d.id}</span> {d.name}
+                <span style={{ color: '#7e8ca8' }}> {Array.isArray(d.oems) ? d.oems.join('/') : ''} {d.group_id ? `· ${d.group_id}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── 1 · Create a project ───────────────────────────── */}
+      <div style={S.card}>
+        <h2 style={S.h2}>1 · Create a project (engagement)</h2>
         <div style={S.row}>
           <div style={{ flex: '1 1 180px' }}>
             <label style={S.label}>Type</label>
             <select style={S.input} value={type} onChange={(e) => setType(e.target.value)}>
-              {TYPES.map((t) => (
-                <option key={t.v} value={t.v}>
-                  {t.label}
-                </option>
-              ))}
+              {TYPES.map((t) => (<option key={t.v} value={t.v}>{t.label}</option>))}
             </select>
           </div>
-          <div style={{ flex: '1 1 220px' }}>
-            <label style={S.label}>Dealer name</label>
-            <input style={S.input} value={dealerName} onChange={(e) => setDealerName(e.target.value)} placeholder="e.g. Don Ayres Honda" />
+          <div style={{ flex: '1 1 240px' }}>
+            <label style={S.label}>Dealership ID (pick from list B)</label>
+            <input style={{ ...S.input, ...S.mono }} value={projDealershipId} onChange={(e) => setProjDealershipId(e.target.value)} placeholder="DLR-000142" />
           </div>
-          <div style={{ flex: '1 1 120px' }}>
-            <label style={S.label}>DMS</label>
-            <input style={S.input} value={dms} onChange={(e) => setDms(e.target.value)} placeholder="CDK" />
-          </div>
-          <div style={{ flex: '1 1 120px' }}>
-            <label style={S.label}>Conduit</label>
-            <input style={S.input} value={conduit} onChange={(e) => setConduit(e.target.value)} placeholder="fortellis" />
-          </div>
-          <button style={S.btn} onClick={() => createProject(false)}>
-            Mint
-          </button>
+          <button style={S.btn} onClick={() => createProject(false)}>Mint project</button>
         </div>
-        {createMsg && <p style={{ color: '#37c871', fontSize: 13, marginTop: 12 }}>{createMsg}</p>}
+        {createMsg && <p style={{ color: createMsg.startsWith('✗') ? '#e5564b' : '#37c871', fontSize: 13, marginTop: 12 }}>{createMsg}</p>}
         {dupe && (
           <div style={{ marginTop: 12, padding: 12, border: '1px solid #5a4a1f', borderRadius: 8, background: '#241d09' }}>
-            <p style={{ margin: '0 0 8px', color: '#e5c354', fontSize: 13 }}>
-              A project for that dealer already exists:
-            </p>
+            <p style={{ margin: '0 0 8px', color: '#e5c354', fontSize: 13 }}>An engagement of this type already exists for that dealership:</p>
             {dupe.map((p) => (
-              <div key={p.id} style={{ ...S.mono, fontSize: 13 }}>
-                {p.id} — {p.type} {p.dms ? `· ${p.dms}` : ''}
-              </div>
+              <div key={p.id} style={{ ...S.mono, fontSize: 13 }}>{p.id} — {p.type}</div>
             ))}
             <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-              <button style={S.btn} onClick={() => createProject(true)}>
-                Create anyway
-              </button>
-              <button style={S.btnGhost} onClick={() => setDupe(null)}>
-                Cancel
-              </button>
+              <button style={S.btn} onClick={() => createProject(true)}>Create anyway</button>
+              <button style={S.btnGhost} onClick={() => setDupe(null)}>Cancel</button>
             </div>
           </div>
         )}
@@ -314,7 +392,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               {projects.slice(0, 8).map((p) => (
                 <div key={p.id} style={{ display: 'flex', gap: 8, cursor: 'pointer' }} onClick={() => setProjectId(p.id)}>
                   <span style={{ color: '#6ea8fe' }}>{p.id}</span>
-                  <span style={{ color: '#7e8ca8' }}>{p.dealer_name || '—'}</span>
+                  <span style={{ color: '#7e8ca8' }}>{p.dealership_id || '—'}</span>
                 </div>
               ))}
             </div>
@@ -322,46 +400,37 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         )}
       </div>
 
-      {/* ── Acceptance test ────────────────────────────────── */}
+      {/* ── 2 · Acceptance test ────────────────────────────── */}
       <div style={S.card}>
         <h2 style={S.h2}>2 · Acceptance test — link the ID across systems</h2>
         <label style={S.label}>Project ID (mint above or paste one)</label>
         <input style={{ ...S.input, ...S.mono }} value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="ONB-2026-0001" />
 
-        {/* portal */}
         <div style={{ marginTop: 18, ...S.row }}>
           <div style={{ flex: '1 1 240px' }}>
             <label style={S.label}>Portal dealer ID {dot(steps.portal.status)}</label>
             <input style={S.input} value={dealerId} onChange={(e) => setDealerId(e.target.value)} placeholder="existing dealer id" />
           </div>
-          <button style={S.btn} onClick={() => runWire('portal', { projectId, dealerId })}>
-            Write + read back
-          </button>
+          <button style={S.btn} onClick={() => runWire('portal', { projectId, dealerId })}>Write + read back</button>
         </div>
         {steps.portal.msg && <p style={{ fontSize: 12, color: '#9db2d3' }}>{steps.portal.msg}</p>}
 
-        {/* clickup */}
         <div style={{ marginTop: 14, ...S.row }}>
           <div style={{ flex: '1 1 240px' }}>
             <label style={S.label}>ClickUp task ID {dot(steps.clickup.status)}</label>
             <input style={S.input} value={taskId} onChange={(e) => setTaskId(e.target.value)} placeholder="existing task id" />
           </div>
-          <button style={S.btn} onClick={() => runWire('clickup', { projectId, taskId })}>
-            Write + read back
-          </button>
+          <button style={S.btn} onClick={() => runWire('clickup', { projectId, taskId })}>Write + read back</button>
         </div>
         {steps.clickup.msg && <p style={{ fontSize: 12, color: '#9db2d3' }}>{steps.clickup.msg}</p>}
 
-        {/* outlook */}
         <div style={{ marginTop: 14 }}>
           <label style={S.label}>Outlook thread {dot(steps.outlook.status)}</label>
           <div style={S.row}>
             <div style={{ flex: '1 1 240px' }}>
               <input style={S.input} value={subjectQ} onChange={(e) => setSubjectQ(e.target.value)} placeholder="search by subject…" />
             </div>
-            <button style={S.btnGhost} onClick={searchThreads}>
-              Find threads
-            </button>
+            <button style={S.btnGhost} onClick={searchThreads}>Find threads</button>
           </div>
           {threads.length > 0 && (
             <div style={{ marginTop: 8, ...S.mono, fontSize: 12 }}>
@@ -380,30 +449,32 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <div style={{ flex: '1 1 320px' }}>
               <input style={{ ...S.input, ...S.mono }} value={conversationId} onChange={(e) => setConversationId(e.target.value)} placeholder="conversationId (or click a thread above)" />
             </div>
-            <button style={S.btn} onClick={() => runWire('outlook', { projectId, conversationId })}>
-              Tag thread + store
-            </button>
+            <button style={S.btn} onClick={() => runWire('outlook', { projectId, conversationId })}>Tag thread + store</button>
           </div>
           {steps.outlook.msg && <p style={{ fontSize: 12, color: '#9db2d3' }}>{steps.outlook.msg}</p>}
         </div>
 
-        {/* lookup */}
         <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #1f2c45' }}>
-          <label style={S.label}>5 · Reverse lookup — find the project from a thread {dot(steps.lookup.status)}</label>
+          <label style={S.label}>5 · Resolve the chain — thread → group / dealership / projects</label>
           <div style={S.row}>
             <div style={{ flex: '1 1 320px' }}>
               <input style={{ ...S.input, ...S.mono }} value={conversationId} onChange={(e) => setConversationId(e.target.value)} placeholder="conversationId" />
             </div>
-            <button style={S.btnGhost} onClick={lookupByConversation}>
-              Look up project
-            </button>
+            <button style={S.btnGhost} onClick={resolveChain}>Resolve chain</button>
           </div>
-          {steps.lookup.msg && <p style={{ fontSize: 12, color: '#9db2d3' }}>{steps.lookup.msg}</p>}
+          {chain && (
+            <div style={{ fontSize: 12, color: '#9db2d3', marginTop: 6, ...S.mono }}>
+              {chain.kind === 'group' && <div>Group {chain.group.id} ({chain.group.name}) → {chain.dealerships.length} dealership(s)</div>}
+              {chain.kind === 'project' && <div>Project {chain.project.id} → dealership {chain.dealership?.id} ({chain.dealership?.name})</div>}
+              {chain.kind === 'none' && <div>No entity linked to that conversationId.</div>}
+              {chain.kind === 'error' && <div style={{ color: '#e5564b' }}>✗ {chain.error}</div>}
+            </div>
+          )}
         </div>
       </div>
 
       <p style={{ ...S.sub, textAlign: 'center' }}>
-        Phase 0 links to existing dealers / tasks / threads — it does not create them.
+        Phase 0.5 — group → dealership → project. Links to existing dealers / tasks / threads; doesn't create them.
       </p>
     </div>
   );
