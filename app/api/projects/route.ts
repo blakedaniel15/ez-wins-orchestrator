@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAuthed, unauthorized } from '@/lib/security';
 import { isProjectType } from '@/lib/ids';
 import {
-  createProject, getProject, getProjectByConversation, findProjectsByDealership, listProjects,
+  createProject, getProject, getProjectByConversation, getProjectsByDealership,
+  findProjectsByDealership, listProjects,
 } from '@/lib/projects';
 
 export const runtime = 'nodejs';
@@ -12,8 +13,10 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
   const id = sp.get('id');
   const conversationId = sp.get('conversationId');
+  const dealershipId = sp.get('dealershipId');
   if (id) return NextResponse.json({ ok: true, project: await getProject(id) });
   if (conversationId) return NextResponse.json({ ok: true, project: await getProjectByConversation(conversationId) });
+  if (dealershipId) return NextResponse.json({ ok: true, projects: await getProjectsByDealership(dealershipId) });
   return NextResponse.json({ ok: true, projects: await listProjects() });
 }
 

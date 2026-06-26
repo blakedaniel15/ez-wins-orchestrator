@@ -21,6 +21,30 @@ DEALER_GROUP        persistent. The dealer group. Knowledge rolls up here.
        └─ PROJECT   WUP-2026-0044  (warranty uplift — ends)
 ```
 
+### The Dealer ID is the one universal ID (confirmed 2026-06-26)
+
+The **dealership id (`DLR-`) is the single ID that travels through every system** and is the anchor
+for the store's entire history — every ClickUp task, onboarding, support, warranty, and email thread
+ties back to it. "Click the Dealer ID" → see everything that ever happened to that store. **Project
+ids (`ONB-`/`SUP-`/`WUP-`) ride alongside** to track one specific engagement start-to-finish. So an
+onboarding ClickUp task carries BOTH: the Dealer ID (rolls up to the store) + the Project ID (tracks
+that engagement).
+
+**Each external system links to the orchestrator tier that matches its grain — but the Dealer ID is
+stamped on all of them so everything rolls up:**
+
+| System | Its grain | Links to | Carries |
+|---|---|---|---|
+| Portal dealer | a persistent store | dealership | **Dealer ID** (`DLR-`) |
+| ClickUp task | one engagement | project | **Dealer ID** + Project ID |
+| Outlook thread | the whole deal | group (or dealership) | group/dealer id |
+
+The orchestrator **dealership record is the hub** — the object you click to see all its projects and,
+through them, every linked task / thread / portal row. (Earlier Phase-0 wiring stamped the project id
+everywhere; that was pre-entity-model. The persistent link is the Dealer ID.)
+
+---
+
 **Projects end; dealerships and groups never do.** Every engagement is its own time-bound project
 with its own ID, permanently hung off a persistent dealership, which optionally rolls up to a
 group. Over time the dealership becomes the accumulated memory of everything that happened with

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthed, unauthorized } from '@/lib/security';
-import { createDealership, getDealership, listDealerships, listDealershipsByGroup } from '@/lib/dealerships';
+import {
+  createDealership, getDealership, listDealerships, listDealershipsByGroup, setDealershipRefs,
+} from '@/lib/dealerships';
+import { createOrLinkPortalDealer } from '@/lib/portal';
 
 export const runtime = 'nodejs';
 
@@ -30,7 +33,26 @@ export async function POST(req: NextRequest) {
       oems: Array.isArray(b.oems) ? b.oems : [],
       portal_dealer_id: b.portal_dealer_id || null,
     });
-    return NextResponse.json({ ok: true, dealership });
+
+    // Orchestrator owns portal infrastructure: create-or-link the portal dealer
+    // immediately (pipeline), stamping the Dealer ID. Resilient — a portal hiccup
+    // doesn't fail the dealership create.
+    let portal: { portalDealerId: string; action: 'linked' | 'created' } | null = null;
+    let portalError: string | null = null;
+    if (!dealership.portal_dealer_id) {
+      try {
+        portal = await createOrLinkPortalDealer({
+          dealershipId: dealership.id,
+          name: dealership.name,
+          dms: dealership.dms,
+        });
+        await setDealershipRefs(dealership.id, { portal_dealer_id: portal.portalDealerId });
+        dealership.portal_dealer_id = portal.portalDealerId;
+      } catch (e) {
+        portalError = (e as Error).message;
+      }
+    }
+    return NextResponse.json({ ok: true, dealership, portal, portalError });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
   }

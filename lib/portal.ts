@@ -54,3 +54,34 @@ export async function readProjectIdFromDealer(dealerId: string): Promise<string 
   const v = target.projectId;
   return v == null || v === '' ? null : String(v);
 }
+
+// Create-or-link a portal dealer for a dealership (Blake's call: match existing
+// by name → link & stamp the Dealer ID; else create a fresh pipeline dealer).
+// The portal dealer carries the persistent **Dealer ID** (`DLR-`) in its
+// `projectId` field — the one universal id that travels through every system.
+export async function createOrLinkPortalDealer(input: {
+  dealershipId: string;
+  name: string;
+  dms?: string | null;
+}): Promise<{ portalDealerId: string; action: 'linked' | 'created' }> {
+  const dealers = await getDealers();
+  const existing = dealers.find(
+    (d) => String(d.name || '').trim().toLowerCase() === input.name.trim().toLowerCase()
+  );
+  if (existing) {
+    existing.projectId = input.dealershipId;
+    await putDealers(dealers);
+    return { portalDealerId: String(existing.id), action: 'linked' };
+  }
+  const id = `d_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  dealers.push({
+    id,
+    name: input.name,
+    dms: input.dms || '',
+    status: 'pipeline',
+    projectId: input.dealershipId,
+    lastUpdated: new Date().toISOString(),
+  });
+  await putDealers(dealers);
+  return { portalDealerId: id, action: 'created' };
+}

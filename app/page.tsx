@@ -139,6 +139,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [dlrConduit, setDlrConduit] = useState('');
   const [dlrOems, setDlrOems] = useState('');
   const [dlrPortalId, setDlrPortalId] = useState('');
+  const [dlrResult, setDlrResult] = useState('');
+  const [history, setHistory] = useState<{ dealership: any; projects: any[] } | null>(null);
 
   // project create
   const [type, setType] = useState('onboarding');
@@ -195,6 +197,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   }
 
   async function createDealershipFn() {
+    setDlrResult('Creating…');
     const oems = dlrOems.split(',').map((s) => s.trim()).filter(Boolean);
     const r = await fetch('/api/dealerships', {
       method: 'POST',
@@ -205,10 +208,24 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       }),
     }).then((x) => x.json());
     if (r.ok) {
+      const p = r.portal
+        ? `· portal dealer ${r.portal.action} (${r.portal.portalDealerId})`
+        : r.portalError
+          ? `· ⚠ portal: ${r.portalError}`
+          : '';
+      setDlrResult(`✓ ${r.dealership.id} ${p}`);
       setDlrName(''); setDlrDms(''); setDlrConduit(''); setDlrOems(''); setDlrPortalId('');
       setProjDealershipId(r.dealership.id);
       loadEntities();
+    } else {
+      setDlrResult(`✗ ${r.error || 'Failed.'}`);
     }
+  }
+
+  async function loadHistory(d: any) {
+    setProjDealershipId(d.id);
+    const r = await fetch(`/api/projects?dealershipId=${encodeURIComponent(d.id)}`).then((x) => x.json());
+    setHistory({ dealership: d, projects: r.ok ? r.projects || [] : [] });
   }
 
   async function createProject(force = false) {
@@ -339,19 +356,42 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <input style={S.input} value={dlrOems} onChange={(e) => setDlrOems(e.target.value)} placeholder="Hyundai" />
           </div>
           <div style={{ flex: '1 1 200px' }}>
-            <label style={S.label}>Portal dealer ID</label>
-            <input style={{ ...S.input, ...S.mono }} value={dlrPortalId} onChange={(e) => setDlrPortalId(e.target.value)} placeholder="seed_0" />
+            <label style={S.label}>Portal dealer ID (blank = auto)</label>
+            <input style={{ ...S.input, ...S.mono }} value={dlrPortalId} onChange={(e) => setDlrPortalId(e.target.value)} placeholder="blank → orchestrator creates/links" />
           </div>
           <button style={S.btn} onClick={createDealershipFn}>Create dealership</button>
         </div>
+        {dlrResult && <p style={{ color: dlrResult.startsWith('✗') ? '#e5564b' : '#37c871', fontSize: 13, marginTop: 12 }}>{dlrResult}</p>}
         {dealerships.length > 0 && (
           <div style={{ marginTop: 12, ...S.mono, fontSize: 13, lineHeight: 1.7 }}>
             {dealerships.slice(0, 10).map((d) => (
-              <div key={d.id} style={{ cursor: 'pointer' }} onClick={() => setProjDealershipId(d.id)}>
+              <div key={d.id} style={{ cursor: 'pointer' }} onClick={() => loadHistory(d)}>
                 <span style={{ color: '#37c871' }}>{d.id}</span> {d.name}
-                <span style={{ color: '#7e8ca8' }}> {Array.isArray(d.oems) ? d.oems.join('/') : ''} {d.group_id ? `· ${d.group_id}` : ''}</span>
+                <span style={{ color: '#7e8ca8' }}> {Array.isArray(d.oems) ? d.oems.join('/') : ''} {d.group_id ? `· ${d.group_id}` : ''} {d.portal_dealer_id ? `· portal ${d.portal_dealer_id}` : ''}</span>
               </div>
             ))}
+          </div>
+        )}
+        {history && (
+          <div style={{ marginTop: 16, padding: 12, border: '1px solid #28354f', borderRadius: 8, background: '#0b1220' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#cdd9ee' }}>
+              {history.dealership.id} — {history.dealership.name}
+            </div>
+            <div style={{ ...S.mono, fontSize: 12, color: '#7e8ca8', marginTop: 4 }}>
+              {history.dealership.dms || '—'} · {Array.isArray(history.dealership.oems) ? history.dealership.oems.join('/') : ''} ·
+              portal {history.dealership.portal_dealer_id || '(none)'} · group {history.dealership.group_id || '(none)'}
+            </div>
+            <div style={{ ...S.mono, fontSize: 12, marginTop: 10 }}>
+              {history.projects.length === 0
+                ? <span style={{ color: '#7e8ca8' }}>No projects yet.</span>
+                : history.projects.map((p) => (
+                    <div key={p.id} style={{ padding: '2px 0' }}>
+                      <span style={{ color: '#6ea8fe' }}>{p.id}</span>{' '}
+                      <span style={{ color: '#9db2d3' }}>{p.type} · {p.status}</span>
+                      {p.clickup_task_id ? <span style={{ color: '#7e8ca8' }}> · task {p.clickup_task_id}</span> : null}
+                    </div>
+                  ))}
+            </div>
           </div>
         )}
       </div>
