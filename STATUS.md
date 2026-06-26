@@ -45,10 +45,15 @@ Test row: `ONB-2026-0001`.
   docs-ready+**RCI-1 PDF** → `- COMPLETED` = approved+data-delivered) AND offboarding
   (`- CANCELLED` decline, termination, BUY/SELL). **Proved we can pull the RCI-1 PDF off the email and
   extract every field** (Customer #, PPSYSID/Store/Branch, address, EULA date, signatory).
-- **Tekion — next.** APC 2.0 likely offers a partner **API/webhook** (cleaner than email). Open: does
-  Blake have an `apc.tekioncloud.com` partner account w/ API access?
-- **DealerVault — after Tekion.** "Feed Request Notification" email + portal "Active" status + vendor
-  API. Open: real notification email + API availability.
+- **Tekion ✅ CONFIRMED.** Two emails from `noreply-apc@tekioncloud.com`: "New Connection Request"
+  (connection already live → create Branch task from name+address → Dev; Dealer ID via dashboard
+  scrape, devs fetch it) and "withdrawn" (ignore). No API, no approval step.
+- **DealerVault ✅ CONFIRMED.** Authenticom 3-email flow: Feed Approval Request Confirmation (lists
+  the dealer's approver contacts — auto-draft a loop-in email, Blake's idea), Client Action Needed
+  (unresponsive → chase trigger), Feed Activated (→ scrape DVD ID + DMS, create Branch task → Dev).
+  Portal submit stays manual.
+
+**All 4 DMS deep-dives complete** — see `docs/specs/dms-approval-flows.md`.
 
 ## Onboarding skill absorbed → Phase 2 blueprint
 
@@ -62,9 +67,9 @@ comments, EZ-Wins group-naming rule. The orchestrator absorbs this as Phase 2.
 
 ## Open items / next actions
 
-1. **Tekion deep-dive** — confirm APC partner API access, else get a real approval email. Then DealerVault.
-2. **Build Phase 0.5** — run `docs/plans/phase-0.5-entity-model.md` (Blake runs the migration SQL in Neon).
-3. **Minor, deferred:** Reynolds package-conversion / billing / re-cert rounds; reverse-lookup UI
+1. **Build Phase 0.5** — the next build. Run `docs/plans/phase-0.5-entity-model.md` (Blake runs the
+   migration SQL in Neon when prompted). DMS mapping is done; nothing blocks the build.
+2. **Minor, deferred:** Reynolds package-conversion / billing / re-cert rounds; reverse-lookup UI
    auto-fill; the `tekion-approval-guide.pdf` missing-file bug in MOC-Onboarding-Form.
 
 ## Decisions locked
