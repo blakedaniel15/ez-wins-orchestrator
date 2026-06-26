@@ -129,26 +129,30 @@ invoices, re-certification/audit.
 
 ---
 
-## DealerVault (Authenticom) — flow mapped; portal/API read
+## DealerVault (Authenticom) — CONFIRMED from real emails ✅
 
-- **Conduit:** `dealervault`. Fronts DealerTrack, AutoMate, PBS, and "Other"/unknown DMS. The
-  underlying `dms` is still tracked separately (the ID-need rule keys off the underlying DMS).
-- **Outbound (known):** EZ Wins **manually submits** a data-integration request in the DealerVault
-  vendor portal ("no bot in their portal" — stays manual). Then emails the dealer a heads-up that
-  DealerVault will notify their **admin on file** to approve (Blake fills in the admin name/email
-  after submitting). (`email_assistant_prompt.md:432-451, 631-653`.)
-- **Confirmation (NEW — web 2026-06):** DealerVault **sends a "Feed Request Notification" email** to
-  the admin; vendors **verify approval in the DealerVault portal** — feeds show **"Active" in the
-  Store Summary**. DealerVault also has a **vendor API**. So "read the approved dealer ID" = portal
-  Store Summary (or API), matching the plan.
-- **Likely identifiers:** store = dealership name + a DealerVault store/account number; feed = the
-  active Sales/Service feed per store.
-- **Automation:** read the "Active" status + dealer ID from the portal (Playwright on the saved
-  session, same expired-session prompt as Fortellis) or the vendor API; the **+3-business-day FOD
-  chase** when the admin hasn't approved (generic cadence). Data entry stays manual.
-- **NEEDED FROM BLAKE:** (1) forward a real DealerVault "Feed Request Notification" / approval email;
-  (2) is there a DealerVault **vendor API** you have access to? (3) where do you read the approved
-  dealer ID — the portal Store Summary, or the email?
+- **Conduit:** `dealervault`. Fronts DealerTrack, AutoMate, PBS, Dealerbuilt, "Other". Underlying
+  `dms` tracked separately. DVD-prefixed ID (e.g. `DVD39749`) is the per-feed key.
+- **Outbound (manual, stays manual):** EZ Wins submits the feed request in the DealerVault portal
+  (no bot). Blake submits it **before** replying to the MOC intro so he gets the dealer's approver
+  contacts (see below). **Three emails follow, all from Authenticom:**
+- **1. Feed Approval Request Confirmation** (`notify@authenticom.com` → Blake): "a notification has
+  been sent to {Dealer} requesting they approve Service/Sales data to Ez-Wins" + **a table of the
+  dealer's approver contacts (Name / Email / Phone)** — the "admins on file." → **automation
+  opportunity (Blake's idea):** extract the contacts and auto-draft a reply on the onboarding thread
+  that **loops those approvers in** so they know what to approve (drafts-first).
+- **2. Client Action Needed – {Dealer} Unresponsive** (`alerts@authenticom.com` → Blake): dealer
+  hasn't approved; "reach out to this dealer." **Re-lists the approver contacts.** → this email IS
+  the chase trigger (DealerVault tells you when to intervene — no blind +3-day timer); OUTBOX "chase
+  {dealer} — DV approval pending" with the contacts.
+- **3. Feed Activated - {Dealer}** (`notify@authenticom.com` → e.g. gary@, Cc blake@ + the dev):
+  feed approved/active; body has **Store Details: Group Name, Store Name, Location (full address)**.
+  → feed-approved signal: **browser-scrape the DV portal for the `DVD` ID + underlying DMS** (saved
+  session; Path C of the onboarding skill), create/advance the ClickUp Branch task (name+address from
+  the email), **send to Dev**. The DVD ID is **NOT in any email** — scrape only (confirmed by Blake).
+- **Senders:** `notify@authenticom.com` (confirmation + activated), `alerts@authenticom.com` (action
+  needed). Subjects carry the dealer name.
+- **No EZ-Wins vendor API** in practice — email triggers + saved-session portal scrape.
 
 ---
 
@@ -159,7 +163,12 @@ invoices, re-certification/audit.
 | **Fortellis** | ✅ confirmed | activation email (`Organization` + `Subscription ID`) |
 | **Reynolds** | ✅ confirmed | `RCI_Deployment@reyrey.com` structured subjects + RCI-1 PDF; full on/offboarding |
 | **Tekion** | ✅ confirmed | `noreply-apc@tekioncloud.com` connection-request email (live; create task → Dev) / withdrawal = ignore; Dealer ID from dashboard scrape |
-| **DealerVault** | ⏳ next | "Feed Request Notification" email + portal "Active" status; need a real sample |
+| **DealerVault** | ✅ confirmed | Authenticom 3-email flow (request-confirmation w/ approver contacts → unresponsive-alert → Feed Activated); DVD ID from portal scrape |
+
+**All 4 DMS deep-dives complete.** Cross-cutting pattern: a feed-approved/activated email (or a live
+connection) → create/advance the ClickUp **Branch** task → **send to Dev**; the platform ID comes
+from the email (Fortellis/Reynolds) or a saved-session portal scrape (Tekion/DealerVault). Chase
+triggers are vendor-sent where available (DealerVault "Client Action Needed") else cadence-timed.
 
 ## Design implication
 
