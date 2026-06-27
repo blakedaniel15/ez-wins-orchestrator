@@ -41,6 +41,10 @@ Test row: `ONB-2026-0001`.
   Dealer ID — verified live (linked Phil Long Honda). Plus a dealership "history" view (click a
   dealership → its projects + links). Portal dealer carries `DLR-`; ClickUp task carries Dealer ID +
   project id; thread ties to the group.
+- **Registry populated ✅ (2026-06-26)** — bulk-imported the whole portal: **248 dealerships + 31
+  groups** created, **248 portal dealers stamped** with their Dealer IDs (251 total; idempotent
+  import via the "Import from portal" button, `lib/import.ts`). The orchestrator now reflects the real
+  business.
 
 ## DMS approval flows — `docs/specs/dms-approval-flows.md`
 
