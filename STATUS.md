@@ -35,6 +35,12 @@ Test row: `ONB-2026-0001`.
 - **Phase 0.5 ✅** — group → dealership → project entity model (dealership = first-class memory
   anchor; projects end). Spec: `docs/specs/group-dealership-entity-model.md`; plan:
   `docs/plans/phase-0.5-entity-model.md`. Live & verified.
+- **Portal create-or-link ✅** — the **Dealer ID (`DLR-`) is the one universal id** that travels
+  everywhere (decided 2026-06-26). On dealership create, the orchestrator creates-or-links the portal
+  dealer (match by name → link existing like Phil Long, else create a pipeline dealer) and stamps the
+  Dealer ID — verified live (linked Phil Long Honda). Plus a dealership "history" view (click a
+  dealership → its projects + links). Portal dealer carries `DLR-`; ClickUp task carries Dealer ID +
+  project id; thread ties to the group.
 
 ## DMS approval flows — `docs/specs/dms-approval-flows.md`
 
