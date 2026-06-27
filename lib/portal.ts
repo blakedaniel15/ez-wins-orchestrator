@@ -39,6 +39,33 @@ async function putDealers(dealers: Dealer[]): Promise<void> {
   if (!res.ok) throw new Error(`Portal dealers save failed (${res.status}): ${await res.text()}`);
 }
 
+// Exposed for the bulk import. Portal GET returns camelCase fields
+// (id, name, dms, groupId, status, projectId, ...).
+export async function getPortalDealers(): Promise<Dealer[]> {
+  return getDealers();
+}
+
+export async function savePortalDealers(dealers: Dealer[]): Promise<void> {
+  return putDealers(dealers);
+}
+
+export interface PortalGroup {
+  id: string;
+  name?: string;
+  billingEmail?: string | null;
+  [k: string]: unknown;
+}
+
+export async function getPortalGroups(): Promise<PortalGroup[]> {
+  const res = await fetch(`${base()}/api/storage?key=${encodeURIComponent('ezw:groups:v1')}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`Portal groups fetch failed (${res.status}): ${await res.text()}`);
+  const json = (await res.json()) as { value: string | null };
+  if (!json.value) return [];
+  return JSON.parse(json.value) as PortalGroup[];
+}
+
 export async function writeProjectIdToDealer(dealerId: string, projectId: string): Promise<void> {
   const dealers = await getDealers();
   const target = dealers.find((d) => d.id === dealerId);

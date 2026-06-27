@@ -47,3 +47,19 @@ async function mintEntityId(prefix: 'GRP' | 'DLR'): Promise<string> {
 
 export const mintGroupId = () => mintEntityId('GRP');
 export const mintDealershipId = () => mintEntityId('DLR');
+
+// Reserve a contiguous block of `count` ids in one statement (for bulk import).
+// Returns the FIRST number in the block; ids are `${prefix}-${pad6(start..start+count-1)}`.
+export async function mintEntityIdBlock(prefix: 'GRP' | 'DLR', count: number): Promise<number> {
+  const rows = (await sql`
+    insert into project_counter (type_year, n)
+    values (${prefix}, ${count})
+    on conflict (type_year) do update set n = project_counter.n + ${count}
+    returning n
+  `) as { n: number }[];
+  return rows[0].n - count + 1;
+}
+
+export function padEntityId(prefix: 'GRP' | 'DLR', n: number): string {
+  return `${prefix}-${String(n).padStart(6, '0')}`;
+}

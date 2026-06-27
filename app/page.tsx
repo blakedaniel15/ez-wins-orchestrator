@@ -141,6 +141,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [dlrPortalId, setDlrPortalId] = useState('');
   const [dlrResult, setDlrResult] = useState('');
   const [history, setHistory] = useState<{ dealership: any; projects: any[] } | null>(null);
+  const [importMsg, setImportMsg] = useState('');
+  const [importing, setImporting] = useState(false);
 
   // project create
   const [type, setType] = useState('onboarding');
@@ -228,6 +230,27 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     setHistory({ dealership: d, projects: r.ok ? r.projects || [] : [] });
   }
 
+  async function runImport() {
+    setImporting(true);
+    setImportMsg('Importing from portal… (this can take a bit)');
+    try {
+      const r = await fetch('/api/import/portal', { method: 'POST' }).then((x) => x.json());
+      if (r.ok) {
+        const s = r.summary;
+        setImportMsg(
+          `✓ ${s.dealershipsCreated} dealerships created (${s.dealershipsSkipped} already imported), ` +
+          `${s.groupsCreated} groups, ${s.portalDealersStamped} portal dealers stamped — of ${s.totalPortalDealers} total.`
+        );
+        loadEntities();
+      } else {
+        setImportMsg(`✗ ${r.error || 'Import failed.'}`);
+      }
+    } catch (e: any) {
+      setImportMsg(`✗ ${e.message || 'Request failed.'}`);
+    }
+    setImporting(false);
+  }
+
   async function createProject(force = false) {
     setCreateMsg('Minting…');
     setDupe(null);
@@ -308,6 +331,19 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           <p style={S.sub}>Phase 0.5 — group → dealership → project</p>
         </div>
         <button style={S.btnGhost} onClick={logout}>Sign out</button>
+      </div>
+
+      {/* ── Bulk import ────────────────────────────────────── */}
+      <div style={S.card}>
+        <h2 style={S.h2}>Import dealers from the portal</h2>
+        <p style={{ ...S.sub, margin: '0 0 12px' }}>
+          One-click, idempotent. Creates a dealership + group record for every portal dealer/group,
+          links them, and stamps the Dealer ID back onto each portal dealer. Safe to re-run.
+        </p>
+        <button style={S.btn} onClick={runImport} disabled={importing}>
+          {importing ? 'Importing…' : 'Import from portal'}
+        </button>
+        {importMsg && <p style={{ color: importMsg.startsWith('✗') ? '#e5564b' : '#37c871', fontSize: 13, marginTop: 12 }}>{importMsg}</p>}
       </div>
 
       {/* ── A · Groups ─────────────────────────────────────── */}
