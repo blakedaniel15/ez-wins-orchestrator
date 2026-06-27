@@ -57,3 +57,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
   }
 }
+
+// PATCH { id, portal_dealer_id?, group_id?, dms?, conduit?, status?, connectPortal? }
+// Relink/repair an existing dealership. connectPortal=true runs create-or-link
+// against the portal (match by name → link, else create) and saves the result.
+export async function PATCH(req: NextRequest) {
+  if (!(await isAuthed())) return unauthorized();
+  try {
+    const b = (await req.json()) as {
+      id?: string; portal_dealer_id?: string; group_id?: string;
+      dms?: string; conduit?: string; status?: string; connectPortal?: boolean;
+    };
+    if (!b.id) return NextResponse.json({ ok: false, error: 'id is required.' }, { status: 400 });
+
+    let portal: { portalDealerId: string; action: 'linked' | 'created' } | null = null;
+    if (b.connectPortal) {
+      const d = await getDealership(b.id);
+      if (!d) return NextResponse.json({ ok: false, error: 'dealership not found.' }, { status: 404 });
+      portal = await createOrLinkPortalDealer({ dealershipId: d.id, name: d.name, dms: d.dms });
+    }
+
+    const dealership = await setDealershipRefs(b.id, {
+      portal_dealer_id: portal?.portalDealerId ?? b.portal_dealer_id ?? undefined,
+      group_id: b.group_id ?? undefined,
+      dms: b.dms ?? undefined,
+      conduit: b.conduit ?? undefined,
+      status: b.status ?? undefined,
+    });
+    return NextResponse.json({ ok: true, dealership, portal });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
+  }
+}

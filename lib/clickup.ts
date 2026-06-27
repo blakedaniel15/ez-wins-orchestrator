@@ -15,6 +15,12 @@ function projectIdFieldUuid(): string {
   return id;
 }
 
+function dealerIdFieldUuid(): string {
+  const id = process.env.CLICKUP_DEALER_ID_FIELD_UUID;
+  if (!id) throw new Error('CLICKUP_DEALER_ID_FIELD_UUID is not set.');
+  return id;
+}
+
 interface ClickUpTask {
   id: string;
   name: string;
@@ -50,4 +56,16 @@ export async function readProjectIdField(taskId: string): Promise<string | null>
   const f = (task.custom_fields || []).find((c) => c.id === fieldId);
   const v = f?.value;
   return v == null || v === '' ? null : String(v);
+}
+
+// Set the Dealer ID custom field on a task (the universal id, so every task
+// rolls up to its dealership). Requires CLICKUP_DEALER_ID_FIELD_UUID.
+export async function writeDealerIdField(taskId: string, dealerId: string): Promise<void> {
+  const url = `${CLICKUP_BASE}/task/${taskId}/field/${dealerIdFieldUuid()}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ value: dealerId }),
+  });
+  if (!res.ok) throw new Error(`ClickUp dealer-id write failed (${res.status}): ${await res.text()}`);
 }

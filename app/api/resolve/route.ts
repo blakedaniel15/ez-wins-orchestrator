@@ -18,7 +18,12 @@ export async function GET(req: NextRequest) {
     const group = await getGroupByConversation(conversationId);
     if (group) {
       const dealerships = await listDealershipsByGroup(group.id);
-      return NextResponse.json({ ok: true, kind: 'group', group, dealerships });
+      // Fan out: attach each dealership's projects so the chain is complete.
+      const withProjects = await Promise.all(
+        dealerships.map(async (d) => ({ ...d, projects: await getProjectsByDealership(d.id) }))
+      );
+      const projectCount = withProjects.reduce((n, d) => n + d.projects.length, 0);
+      return NextResponse.json({ ok: true, kind: 'group', group, dealerships: withProjects, projectCount });
     }
     const project = await getProjectByConversation(conversationId);
     if (project) {

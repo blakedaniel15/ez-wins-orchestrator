@@ -133,6 +133,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [groups, setGroups] = useState<any[]>([]);
   const [dealerships, setDealerships] = useState<any[]>([]);
   const [groupName, setGroupName] = useState('');
+  const [groupThreadId, setGroupThreadId] = useState('');
+  const [groupConv, setGroupConv] = useState('');
+  const [groupTagMsg, setGroupTagMsg] = useState('');
   const [dlrName, setDlrName] = useState('');
   const [dlrGroupId, setDlrGroupId] = useState('');
   const [dlrDms, setDlrDms] = useState('');
@@ -143,6 +146,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [history, setHistory] = useState<{ dealership: any; projects: any[] } | null>(null);
   const [importMsg, setImportMsg] = useState('');
   const [importing, setImporting] = useState(false);
+  const [relinkPortal, setRelinkPortal] = useState('');
+  const [relinkGroup, setRelinkGroup] = useState('');
+  const [relinkMsg, setRelinkMsg] = useState('');
 
   // project create
   const [type, setType] = useState('onboarding');
@@ -198,6 +204,20 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
   }
 
+  async function tagGroupThread() {
+    setGroupTagMsg('Tagging…');
+    try {
+      const r = await fetch('/api/wire/group-thread', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ groupId: groupThreadId, conversationId: groupConv }),
+      }).then((x) => x.json());
+      setGroupTagMsg(r.ok ? `✓ tagged ${r.tagged} message(s) with ${r.category}` : `✗ ${r.error}`);
+    } catch (e: any) {
+      setGroupTagMsg(`✗ ${e.message}`);
+    }
+  }
+
   async function createDealershipFn() {
     setDlrResult('Creating…');
     const oems = dlrOems.split(',').map((s) => s.trim()).filter(Boolean);
@@ -226,8 +246,29 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
 
   async function loadHistory(d: any) {
     setProjDealershipId(d.id);
+    setRelinkPortal(d.portal_dealer_id || '');
+    setRelinkGroup(d.group_id || '');
+    setRelinkMsg('');
     const r = await fetch(`/api/projects?dealershipId=${encodeURIComponent(d.id)}`).then((x) => x.json());
     setHistory({ dealership: d, projects: r.ok ? r.projects || [] : [] });
+  }
+
+  async function patchDealership(body: any, okMsg: (r: any) => string) {
+    setRelinkMsg('Saving…');
+    try {
+      const r = await fetch('/api/dealerships', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: history?.dealership.id, ...body }),
+      }).then((x) => x.json());
+      if (r.ok) {
+        setRelinkMsg(okMsg(r));
+        if (r.dealership) loadHistory(r.dealership);
+        loadEntities();
+      } else setRelinkMsg(`✗ ${r.error}`);
+    } catch (e: any) {
+      setRelinkMsg(`✗ ${e.message}`);
+    }
   }
 
   async function runImport() {
@@ -296,9 +337,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       if (kind === 'outlook') {
         setStep(kind, { status: 'ok', msg: `Tagged ${j.tagged} message(s) with ${j.category}` });
       } else {
+        const dealerNote =
+          kind === 'clickup'
+            ? j.dealerStamp ? ` · dealer ${j.dealerStamp}` : j.dealerError ? ` · dealer: ${j.dealerError}` : ''
+            : '';
         setStep(kind, {
           status: j.match ? 'ok' : 'fail',
-          msg: j.match ? `Read back: ${j.readback}` : `Mismatch — read back: ${j.readback ?? '(none)'}`,
+          msg: (j.match ? `Read back: ${j.readback}` : `Mismatch — read back: ${j.readback ?? '(none)'}`) + dealerNote,
         });
       }
     } catch (e: any) {
@@ -357,14 +402,27 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           <button style={S.btn} onClick={createGroupFn}>Create group</button>
         </div>
         {groups.length > 0 && (
-          <div style={{ marginTop: 12, ...S.mono, fontSize: 13, lineHeight: 1.7 }}>
+          <div style={{ marginTop: 12, ...S.mono, fontSize: 13, lineHeight: 1.7, maxHeight: 200, overflowY: 'auto' }}>
             {groups.map((g) => (
-              <div key={g.id} style={{ cursor: 'pointer' }} onClick={() => setDlrGroupId(g.id)}>
+              <div key={g.id} style={{ cursor: 'pointer' }} onClick={() => { setDlrGroupId(g.id); setGroupThreadId(g.id); }}>
                 <span style={{ color: '#6ea8fe' }}>{g.id}</span> {g.name}
               </div>
             ))}
           </div>
         )}
+        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #1f2c45' }}>
+          <label style={S.label}>Tag a thread to a group (one thread → all its dealers)</label>
+          <div style={S.row}>
+            <div style={{ flex: '1 1 150px' }}>
+              <input style={{ ...S.input, ...S.mono }} value={groupThreadId} onChange={(e) => setGroupThreadId(e.target.value)} placeholder="GRP-000007 (click a group)" />
+            </div>
+            <div style={{ flex: '1 1 280px' }}>
+              <input style={{ ...S.input, ...S.mono }} value={groupConv} onChange={(e) => setGroupConv(e.target.value)} placeholder="conversationId" />
+            </div>
+            <button style={S.btn} onClick={tagGroupThread}>Tag thread → group</button>
+          </div>
+          {groupTagMsg && <p style={{ fontSize: 12, color: groupTagMsg.startsWith('✗') ? '#e5564b' : '#37c871' }}>{groupTagMsg}</p>}
+        </div>
       </div>
 
       {/* ── B · Dealerships ────────────────────────────────── */}
@@ -427,6 +485,20 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                       {p.clickup_task_id ? <span style={{ color: '#7e8ca8' }}> · task {p.clickup_task_id}</span> : null}
                     </div>
                   ))}
+            </div>
+            <div style={{ marginTop: 12, paddingTop: 8, borderTop: '1px solid #1f2c45' }}>
+              <label style={S.label}>Relink / repair</label>
+              <div style={S.row}>
+                <div style={{ flex: '1 1 200px' }}>
+                  <input style={{ ...S.input, ...S.mono }} value={relinkPortal} onChange={(e) => setRelinkPortal(e.target.value)} placeholder="portal dealer id" />
+                </div>
+                <div style={{ flex: '1 1 140px' }}>
+                  <input style={{ ...S.input, ...S.mono }} value={relinkGroup} onChange={(e) => setRelinkGroup(e.target.value)} placeholder="group id" />
+                </div>
+                <button style={S.btn} onClick={() => patchDealership({ portal_dealer_id: relinkPortal || undefined, group_id: relinkGroup || undefined }, () => '✓ saved')}>Save links</button>
+                <button style={S.btnGhost} onClick={() => patchDealership({ connectPortal: true }, (r) => `✓ portal ${r.portal?.action} (${r.portal?.portalDealerId})`)}>Auto-connect portal</button>
+              </div>
+              {relinkMsg && <p style={{ fontSize: 12, color: relinkMsg.startsWith('✗') ? '#e5564b' : '#37c871' }}>{relinkMsg}</p>}
             </div>
           </div>
         )}
@@ -540,7 +612,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           </div>
           {chain && (
             <div style={{ fontSize: 12, color: '#9db2d3', marginTop: 6, ...S.mono }}>
-              {chain.kind === 'group' && <div>Group {chain.group.id} ({chain.group.name}) → {chain.dealerships.length} dealership(s)</div>}
+              {chain.kind === 'group' && <div>Group {chain.group.id} ({chain.group.name}) → {chain.dealerships.length} dealership(s), {chain.projectCount} project(s)</div>}
               {chain.kind === 'project' && <div>Project {chain.project.id} → dealership {chain.dealership?.id} ({chain.dealership?.name})</div>}
               {chain.kind === 'none' && <div>No entity linked to that conversationId.</div>}
               {chain.kind === 'error' && <div style={{ color: '#e5564b' }}>✗ {chain.error}</div>}
