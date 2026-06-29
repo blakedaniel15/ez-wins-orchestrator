@@ -56,3 +56,23 @@ create index if not exists idx_project_dealership on project(dealership_id);
 create index if not exists idx_project_type       on project(type);
 create index if not exists idx_project_conv       on project(outlook_conversation_id);
 create index if not exists idx_group_conv         on dealer_group(outlook_conversation_id);
+
+-- group-deal lifecycle (added 2026-06-29)
+alter table dealer_group add column if not exists status text not null default 'open';
+alter table dealer_group add column if not exists contacts jsonb not null default '[]'::jsonb;
+alter table dealer_group add column if not exists locations_url text;
+
+-- decision_log: every confirm/edit/reject on an automation proposal (dealership-anchored, type-faceted)
+create table if not exists decision_log (
+  id bigserial primary key,
+  kind text not null,
+  type text,
+  dealership_id text,
+  group_id text,
+  proposal jsonb not null default '{}'::jsonb,
+  decision text not null,
+  detail jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_decision_dealership on decision_log(dealership_id);
+create index if not exists idx_decision_kind on decision_log(kind);
