@@ -66,6 +66,40 @@ export async function getPortalGroups(): Promise<PortalGroup[]> {
   return JSON.parse(json.value) as PortalGroup[];
 }
 
+async function putPortalGroups(rows: PortalGroup[]): Promise<void> {
+  const res = await fetch(`${base()}/api/storage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: 'ezw:groups:v1', value: JSON.stringify(rows) }),
+  });
+  if (!res.ok) throw new Error(`Portal groups save failed (${res.status}): ${await res.text()}`);
+}
+
+// Ensure a portal group exists for this orchestrator group; match by name → link, else create.
+export async function createOrLinkPortalGroup(input: {
+  groupId: string;
+  name: string;
+}): Promise<{ portalGroupId: string; action: 'linked' | 'created' }> {
+  const rows = await getPortalGroups();
+  const existing = rows.find(
+    (g) => String(g.name || '').trim().toLowerCase() === input.name.trim().toLowerCase()
+  );
+  if (existing) return { portalGroupId: String(existing.id), action: 'linked' };
+  const id = `grp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  rows.push({ id, name: input.name });
+  await putPortalGroups(rows);
+  return { portalGroupId: id, action: 'created' };
+}
+
+// Set a portal dealer's groupId (assign it to its portal group). Full-collection replace.
+export async function setPortalDealerGroup(portalDealerId: string, portalGroupId: string): Promise<void> {
+  const dealers = await getDealers();
+  const target = dealers.find((d) => d.id === portalDealerId);
+  if (!target) throw new Error(`Dealer ${portalDealerId} not found in the portal.`);
+  (target as Dealer & { groupId?: string }).groupId = portalGroupId;
+  await putDealers(dealers);
+}
+
 export async function writeProjectIdToDealer(dealerId: string, projectId: string): Promise<void> {
   const dealers = await getDealers();
   const target = dealers.find((d) => d.id === dealerId);
