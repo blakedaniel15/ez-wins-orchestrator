@@ -149,6 +149,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [relinkPortal, setRelinkPortal] = useState('');
   const [relinkGroup, setRelinkGroup] = useState('');
   const [relinkMsg, setRelinkMsg] = useState('');
+  const [lookupId, setLookupId] = useState('');
+  const [lookupResult, setLookupResult] = useState<any>(null);
 
   // project create
   const [type, setType] = useState('onboarding');
@@ -271,6 +273,16 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     }
   }
 
+  async function doLookup() {
+    setLookupResult({ loading: true });
+    try {
+      const r = await fetch(`/api/lookup?id=${encodeURIComponent(lookupId.trim())}`).then((x) => x.json());
+      setLookupResult(r);
+    } catch (e: any) {
+      setLookupResult({ ok: false, error: e.message });
+    }
+  }
+
   async function runImport() {
     setImporting(true);
     setImportMsg('Importing from portal… (this can take a bit)');
@@ -389,6 +401,50 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           {importing ? 'Importing…' : 'Import from portal'}
         </button>
         {importMsg && <p style={{ color: importMsg.startsWith('✗') ? '#e5564b' : '#37c871', fontSize: 13, marginTop: 12 }}>{importMsg}</p>}
+      </div>
+
+      {/* ── Look up threads by ID ──────────────────────────── */}
+      <div style={S.card}>
+        <h2 style={S.h2}>Look up threads by ID</h2>
+        <p style={{ ...S.sub, margin: '0 0 12px' }}>
+          Enter any Dealer / Group / Project ID → its email thread(s), with a link to open in Outlook.
+        </p>
+        <div style={S.row}>
+          <div style={{ flex: '1 1 280px' }}>
+            <input
+              style={{ ...S.input, ...S.mono }}
+              value={lookupId}
+              onChange={(e) => setLookupId(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && doLookup()}
+              placeholder="DLR-000142 / GRP-000032 / ONB-2026-0002"
+            />
+          </div>
+          <button style={S.btn} onClick={doLookup}>Look up</button>
+        </div>
+        {lookupResult && !lookupResult.loading && (
+          lookupResult.ok ? (
+            <div style={{ marginTop: 12, ...S.mono, fontSize: 13 }}>
+              <div style={{ color: '#9db2d3' }}>
+                {lookupResult.kind} {lookupResult.entity?.id} — {lookupResult.entity?.name || ''}
+              </div>
+              {lookupResult.threads.length === 0 ? (
+                <div style={{ color: '#7e8ca8', marginTop: 6 }}>No threads linked to this ID yet.</div>
+              ) : (
+                lookupResult.threads.map((t: any, i: number) => (
+                  <div key={i} style={{ marginTop: 6 }}>
+                    <span style={{ color: '#7e8ca8' }}>{t.source}:</span>{' '}
+                    {t.webLink
+                      ? <a href={t.webLink} target="_blank" rel="noreferrer" style={{ color: '#6ea8fe' }}>{t.subject}</a>
+                      : <span>{t.subject}</span>}{' '}
+                    <span style={{ color: '#566b8a' }}>({t.count} msg)</span>
+                  </div>
+                ))
+              )}
+            </div>
+          ) : (
+            <p style={{ color: '#e5564b', fontSize: 13, marginTop: 12 }}>✗ {lookupResult.error}</p>
+          )
+        )}
       </div>
 
       {/* ── A · Groups ─────────────────────────────────────── */}

@@ -44,6 +44,7 @@ export interface GraphMessage {
   from?: { emailAddress?: { name?: string; address?: string } };
   receivedDateTime: string;
   categories?: string[];
+  webLink?: string;
 }
 
 // All messages in a thread, oldest first.
@@ -51,7 +52,7 @@ export async function fetchThreadMessages(token: string, conversationId: string)
   const url =
     `${GRAPH_BASE}/users/${encodeURIComponent(userEmail())}/messages` +
     `?$filter=conversationId eq '${conversationId.replace(/'/g, "''")}'` +
-    `&$select=id,subject,conversationId,from,receivedDateTime,categories` +
+    `&$select=id,subject,conversationId,from,receivedDateTime,categories,webLink` +
     `&$top=50`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) throw new Error(`Thread fetch failed: ${await res.text()}`);
@@ -59,6 +60,23 @@ export async function fetchThreadMessages(token: string, conversationId: string)
   const messages = data.value || [];
   messages.sort((a, b) => new Date(a.receivedDateTime).getTime() - new Date(b.receivedDateTime).getTime());
   return messages;
+}
+
+// Subject + Outlook web link for a thread (the latest message's webLink opens
+// the conversation in OWA). Returns null if the thread has no messages.
+export async function fetchThreadInfo(
+  conversationId: string
+): Promise<{ conversationId: string; subject: string; webLink: string | null; count: number } | null> {
+  const token = await getGraphToken();
+  const messages = await fetchThreadMessages(token, conversationId);
+  if (messages.length === 0) return null;
+  const latest = messages[messages.length - 1];
+  return {
+    conversationId,
+    subject: latest.subject || '(no subject)',
+    webLink: latest.webLink || null,
+    count: messages.length,
+  };
 }
 
 // Search recent messages by subject — a convenience so a thread can be located
