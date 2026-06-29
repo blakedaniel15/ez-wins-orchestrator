@@ -279,8 +279,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       if (r.ok) {
         const s = r.summary;
         setImportMsg(
-          `✓ ${s.dealershipsCreated} dealerships created (${s.dealershipsSkipped} already imported), ` +
-          `${s.groupsCreated} groups, ${s.portalDealersStamped} portal dealers stamped — of ${s.totalPortalDealers} total.`
+          `✓ ${s.dealershipsCreated} created, ${s.dealershipsRegrouped} re-grouped (${s.dealershipsSkipped} existing), ` +
+          `${s.groupsCreated} new groups, ${s.portalDealersStamped} stamped — of ${s.totalPortalDealers} total.`
         );
         loadEntities();
       } else {

@@ -45,14 +45,16 @@ export interface ImportSummary {
   groupsCreated: number;
   dealershipsCreated: number;
   dealershipsSkipped: number;
+  dealershipsRegrouped: number;
   portalDealersStamped: number;
 }
 
 export async function importFromPortal(): Promise<ImportSummary> {
-  // existing links (idempotency)
+  // existing links (idempotency + group reconciliation)
   const existingDlr = (await sql`
-    select portal_dealer_id from dealership where portal_dealer_id is not null
-  `) as { portal_dealer_id: string }[];
+    select id, portal_dealer_id, group_id from dealership where portal_dealer_id is not null
+  `) as { id: string; portal_dealer_id: string; group_id: string | null }[];
+  const byPortalId = new Map(existingDlr.map((r) => [r.portal_dealer_id, r]));
   const seenPortalDealerIds = new Set(existingDlr.map((r) => r.portal_dealer_id));
 
   const existingGrp = (await sql`
@@ -97,6 +99,20 @@ export async function importFromPortal(): Promise<ImportSummary> {
     }
   }
 
+  // ── reconcile group assignments for ALREADY-imported dealerships ──
+  // (so re-running the sync fixes dealers whose portal group changed after import)
+  let regrouped = 0;
+  for (const d of portalDealers) {
+    const existing = byPortalId.get(d.id);
+    if (!existing) continue; // newly created this run already has the right group
+    const portalGroupId = (d as { groupId?: string }).groupId;
+    const desired = portalGroupId ? grpMap.get(portalGroupId) || null : null;
+    if (desired !== existing.group_id) {
+      await sql`update dealership set group_id = ${desired}::text, updated_at = now() where id = ${existing.id}`;
+      regrouped++;
+    }
+  }
+
   // ── stamp Dealer IDs back onto the portal dealers (one write) ──
   let stamped = 0;
   for (const d of portalDealers) {
@@ -114,6 +130,7 @@ export async function importFromPortal(): Promise<ImportSummary> {
     groupsCreated: newGroups.length,
     dealershipsCreated: toImport.length,
     dealershipsSkipped: portalDealers.length - toImport.length,
+    dealershipsRegrouped: regrouped,
     portalDealersStamped: stamped,
   };
 }
