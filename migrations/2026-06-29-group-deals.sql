@@ -4,6 +4,10 @@ alter table dealer_group add column if not exists status text not null default '
 alter table dealer_group add column if not exists contacts jsonb not null default '[]'::jsonb;
 alter table dealer_group add column if not exists locations_url text;
 
+-- Imported groups (they carry a portal_group_id) are historical, not active deals → mark complete.
+-- New deals created via the app default to 'open'. Safe to re-run.
+update dealer_group set status = 'complete' where portal_group_id is not null;
+
 create table if not exists decision_log (
   id bigserial primary key,
   kind text not null,

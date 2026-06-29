@@ -136,6 +136,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [groupThreadId, setGroupThreadId] = useState('');
   const [groupConv, setGroupConv] = useState('');
   const [groupTagMsg, setGroupTagMsg] = useState('');
+  const [openDeals, setOpenDeals] = useState<any[]>([]);
+  const [dealLocations, setDealLocations] = useState('');
+  const [dealContacts, setDealContacts] = useState('');
+  const [assignStore, setAssignStore] = useState('');
+  const [assignDms, setAssignDms] = useState('');
+  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [assignMsg, setAssignMsg] = useState('');
   const [dlrName, setDlrName] = useState('');
   const [dlrGroupId, setDlrGroupId] = useState('');
   const [dlrDms, setDlrDms] = useState('');
@@ -192,6 +199,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   useEffect(() => {
     loadProjects();
     loadEntities();
+    loadOpenDeals();
   }, []);
 
   async function createGroupFn() {
@@ -204,6 +212,43 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       setGroupName('');
       loadEntities();
     }
+  }
+
+  async function loadOpenDeals() {
+    const r = await fetch('/api/groups?status=open').then((x) => x.json());
+    if (r.ok) setOpenDeals(r.groups || []);
+  }
+
+  async function createDealFn() {
+    const contacts = dealContacts.split(',').map((s) => s.trim()).filter(Boolean)
+      .map((email) => ({ email, domain: email.includes('@') ? email.split('@')[1] : '' }));
+    const r = await fetch('/api/groups', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: groupName, locations_url: dealLocations || null, contacts }),
+    }).then((x) => x.json());
+    if (r.ok) { setGroupName(''); setDealLocations(''); setDealContacts(''); loadOpenDeals(); loadEntities(); }
+  }
+
+  async function completeDeal(id: string) {
+    await fetch('/api/groups', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: 'complete' }) });
+    loadOpenDeals();
+  }
+
+  async function getSuggestions() {
+    setAssignMsg(''); setSuggestions([]);
+    const r = await fetch(`/api/assign?store=${encodeURIComponent(assignStore.trim())}`).then((x) => x.json());
+    if (r.ok) setSuggestions(r.suggestions || []);
+    else setAssignMsg(`✗ ${r.error}`);
+  }
+
+  async function confirmAssign(groupId: string) {
+    setAssignMsg('Assigning…');
+    const r = await fetch('/api/assign', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ groupId, name: assignStore.trim(), dms: assignDms || null, decision: 'confirmed', proposal: { suggestions } }),
+    }).then((x) => x.json());
+    if (r.ok) { setAssignMsg(`✓ ${r.dealership.id} → ${groupId}${r.portalError ? ` (⚠ portal: ${r.portalError})` : ''}`); setSuggestions([]); setAssignStore(''); setAssignDms(''); loadOpenDeals(); loadEntities(); }
+    else setAssignMsg(`✗ ${r.error}`);
   }
 
   async function tagGroupThread() {
@@ -478,6 +523,69 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             <button style={S.btn} onClick={tagGroupThread}>Tag thread → group</button>
           </div>
           {groupTagMsg && <p style={{ fontSize: 12, color: groupTagMsg.startsWith('✗') ? '#e5564b' : '#37c871' }}>{groupTagMsg}</p>}
+        </div>
+      </div>
+
+      {/* ── Group deals (open) + assignment ───────────────── */}
+      <div style={S.card}>
+        <h2 style={S.h2}>Group deals (open) + store assignment</h2>
+        <div style={S.row}>
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={S.label}>Group name</label>
+            <input style={S.input} value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Phil Long Group" />
+          </div>
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={S.label}>Contact emails (comma-sep)</label>
+            <input style={S.input} value={dealContacts} onChange={(e) => setDealContacts(e.target.value)} placeholder="it@phillong.com" />
+          </div>
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={S.label}>Locations page URL</label>
+            <input style={S.input} value={dealLocations} onChange={(e) => setDealLocations(e.target.value)} placeholder="https://…/locations" />
+          </div>
+          <button style={S.btn} onClick={createDealFn}>Open group deal</button>
+        </div>
+
+        {openDeals.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <label style={S.label}>Open deals</label>
+            {openDeals.map((g) => (
+              <div key={g.id} style={{ ...S.mono, fontSize: 13, display: 'flex', gap: 10, alignItems: 'center', padding: '3px 0' }}>
+                <span style={{ color: '#6ea8fe' }}>{g.id}</span>
+                <span style={{ flex: 1 }}>{g.name}</span>
+                <button style={S.btnGhost} onClick={() => completeDeal(g.id)}>Mark complete</button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid #1f2c45' }}>
+          <label style={S.label}>Assign a store to a group</label>
+          <div style={S.row}>
+            <div style={{ flex: '1 1 240px' }}>
+              <input style={S.input} value={assignStore} onChange={(e) => setAssignStore(e.target.value)} placeholder="store name (e.g. Concord CDJR)" />
+            </div>
+            <div style={{ flex: '1 1 110px' }}>
+              <input style={S.input} value={assignDms} onChange={(e) => setAssignDms(e.target.value)} placeholder="DMS" />
+            </div>
+            <button style={S.btn} onClick={getSuggestions}>Suggest groups</button>
+          </div>
+          {suggestions.length > 0 && (
+            <div style={{ marginTop: 10, ...S.mono, fontSize: 13 }}>
+              {suggestions.slice(0, 5).map((s) => (
+                <div key={s.group.id} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '3px 0' }}>
+                  <span style={{ color: s.score >= 0.6 ? '#37c871' : s.score >= 0.3 ? '#d9a441' : '#7e8ca8' }}>
+                    {(s.score * 100).toFixed(0)}%
+                  </span>
+                  <span style={{ flex: 1 }}>
+                    {s.group.id} {s.group.name}
+                    {s.matchedStore ? <span style={{ color: '#7e8ca8' }}> · ~{s.matchedStore.name}</span> : null}
+                  </span>
+                  <button style={S.btnGhost} onClick={() => confirmAssign(s.group.id)}>Assign here</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {assignMsg && <p style={{ fontSize: 12, color: assignMsg.startsWith('✗') ? '#e5564b' : '#37c871' }}>{assignMsg}</p>}
         </div>
       </div>
 
