@@ -1,5 +1,7 @@
-// ClickUp — write/read the `project_id` text custom field on an existing task.
-// Auth header is the RAW token (not "Bearer ..."), matching ez-wins-email-assistant.
+// ClickUp — write/read the `project_id` and `dealer_id` text custom fields on a
+// task. Auth header is the RAW token (not "Bearer ..."), matching the email
+// assistant. Custom fields are PER-SPACE in ClickUp (different UUID per space),
+// so we resolve the field by NAME off the task itself (env var is a fallback).
 
 const CLICKUP_BASE = 'https://api.clickup.com/api/v2';
 
@@ -7,18 +9,6 @@ function authHeader(): string {
   const t = process.env.CLICKUP_API_TOKEN;
   if (!t) throw new Error('CLICKUP_API_TOKEN is not set.');
   return t;
-}
-
-function projectIdFieldUuid(): string {
-  const id = process.env.CLICKUP_PROJECT_ID_FIELD_UUID;
-  if (!id) throw new Error('CLICKUP_PROJECT_ID_FIELD_UUID is not set.');
-  return id;
-}
-
-function dealerIdFieldUuid(): string {
-  const id = process.env.CLICKUP_DEALER_ID_FIELD_UUID;
-  if (!id) throw new Error('CLICKUP_DEALER_ID_FIELD_UUID is not set.');
-  return id;
 }
 
 interface ClickUpTask {
@@ -37,35 +27,42 @@ export async function getTask(taskId: string): Promise<ClickUpTask | null> {
   return (await res.json()) as ClickUpTask;
 }
 
-// Set the project_id custom field on a task (POST /task/{id}/field/{fieldId}).
-export async function writeProjectIdField(taskId: string, projectId: string): Promise<void> {
-  const url = `${CLICKUP_BASE}/task/${taskId}/field/${projectIdFieldUuid()}`;
-  const res = await fetch(url, {
+function fieldIdByName(task: ClickUpTask, name: string, envFallback?: string): string | undefined {
+  return (task.custom_fields || []).find((c) => c.name === name)?.id || envFallback;
+}
+
+async function postFieldValue(taskId: string, fieldId: string, value: string): Promise<void> {
+  const res = await fetch(`${CLICKUP_BASE}/task/${taskId}/field/${fieldId}`, {
     method: 'POST',
     headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ value: projectId }),
+    body: JSON.stringify({ value }),
   });
   if (!res.ok) throw new Error(`ClickUp field write failed (${res.status}): ${await res.text()}`);
 }
 
-// Read the project_id custom field value back off a task.
+export async function writeProjectIdField(taskId: string, projectId: string): Promise<void> {
+  const task = await getTask(taskId);
+  if (!task) throw new Error(`Task ${taskId} not found in ClickUp.`);
+  const fid = fieldIdByName(task, 'project_id', process.env.CLICKUP_PROJECT_ID_FIELD_UUID);
+  if (!fid) throw new Error(`No 'project_id' custom field on task ${taskId}'s space.`);
+  await postFieldValue(taskId, fid, projectId);
+}
+
 export async function readProjectIdField(taskId: string): Promise<string | null> {
   const task = await getTask(taskId);
   if (!task) return null;
-  const fieldId = projectIdFieldUuid();
-  const f = (task.custom_fields || []).find((c) => c.id === fieldId);
+  const fid = fieldIdByName(task, 'project_id', process.env.CLICKUP_PROJECT_ID_FIELD_UUID);
+  const f = (task.custom_fields || []).find((c) => c.id === fid);
   const v = f?.value;
   return v == null || v === '' ? null : String(v);
 }
 
-// Set the Dealer ID custom field on a task (the universal id, so every task
-// rolls up to its dealership). Requires CLICKUP_DEALER_ID_FIELD_UUID.
+// Set the Dealer ID custom field on a task (the universal id, so every task rolls
+// up to its dealership). Field resolved by name 'dealer_id' (env fallback).
 export async function writeDealerIdField(taskId: string, dealerId: string): Promise<void> {
-  const url = `${CLICKUP_BASE}/task/${taskId}/field/${dealerIdFieldUuid()}`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ value: dealerId }),
-  });
-  if (!res.ok) throw new Error(`ClickUp dealer-id write failed (${res.status}): ${await res.text()}`);
+  const task = await getTask(taskId);
+  if (!task) throw new Error(`Task ${taskId} not found in ClickUp.`);
+  const fid = fieldIdByName(task, 'dealer_id', process.env.CLICKUP_DEALER_ID_FIELD_UUID);
+  if (!fid) throw new Error(`No 'dealer_id' custom field on task ${taskId}'s space.`);
+  await postFieldValue(taskId, fid, dealerId);
 }
