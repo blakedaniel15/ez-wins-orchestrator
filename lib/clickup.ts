@@ -40,6 +40,48 @@ async function postFieldValue(taskId: string, fieldId: string, value: string): P
   if (!res.ok) throw new Error(`ClickUp field write failed (${res.status}): ${await res.text()}`);
 }
 
+// Create a task on a list. task_type 'Branch' triggers ClickUp's auto-subtask
+// automation (we only ever create the parent). Returns the new task id.
+export async function createTask(
+  listId: string,
+  body: { name: string; description: string; task_type?: string; tags?: string[] }
+): Promise<string> {
+  const res = await fetch(`${CLICKUP_BASE}/list/${listId}/task`, {
+    method: 'POST',
+    headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`ClickUp create task failed (${res.status}): ${await res.text()}`);
+  return ((await res.json()) as { id: string }).id;
+}
+
+export async function setTaskStatus(taskId: string, status: string): Promise<void> {
+  const res = await fetch(`${CLICKUP_BASE}/task/${taskId}`, {
+    method: 'PUT',
+    headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error(`ClickUp status update failed (${res.status}): ${await res.text()}`);
+}
+
+export async function addComment(taskId: string, text: string): Promise<void> {
+  const res = await fetch(`${CLICKUP_BASE}/task/${taskId}/comment`, {
+    method: 'POST',
+    headers: { Authorization: authHeader(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ comment_text: text }),
+  });
+  if (!res.ok) throw new Error(`ClickUp comment failed (${res.status}): ${await res.text()}`);
+}
+
+// Set the plain-text "MOC Region" custom field (resolved by NAME — per-space UUIDs).
+export async function writeMocRegionField(taskId: string, region: string): Promise<void> {
+  const task = await getTask(taskId);
+  if (!task) throw new Error(`Task ${taskId} not found in ClickUp.`);
+  const fid = fieldIdByName(task, 'MOC Region', process.env.CLICKUP_MOC_REGION_FIELD_UUID);
+  if (!fid) throw new Error(`No 'MOC Region' custom field on task ${taskId}'s space — create the text field.`);
+  await postFieldValue(taskId, fid, region);
+}
+
 export async function writeProjectIdField(taskId: string, projectId: string): Promise<void> {
   const task = await getTask(taskId);
   if (!task) throw new Error(`Task ${taskId} not found in ClickUp.`);

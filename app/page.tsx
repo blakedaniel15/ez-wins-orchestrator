@@ -161,6 +161,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [dlrState, setDlrState] = useState('');
   const [dlrZip, setDlrZip] = useState('');
   const [dlrResult, setDlrResult] = useState('');
+  const [lifeMsg, setLifeMsg] = useState('');
+  const [contactsText, setContactsText] = useState('');
   const [history, setHistory] = useState<{ dealership: any; projects: any[] } | null>(null);
   const [importMsg, setImportMsg] = useState('');
   const [importing, setImporting] = useState(false);
@@ -303,6 +305,30 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     } else {
       setDlrResult(`✗ ${r.error || 'Failed.'}`);
     }
+  }
+
+  async function runOnboarding(action: string, extra: any = {}) {
+    if (!projDealershipId) { setLifeMsg('✗ Pick a dealership (set Dealership ID below).'); return; }
+    setLifeMsg('Working…');
+    try {
+      const r = await fetch('/api/onboarding', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, dealershipId: projDealershipId, ...extra }),
+      }).then((x) => x.json());
+      if (!r.ok) { setLifeMsg(`✗ ${r.error || 'Failed.'}`); return; }
+      if (action === 'stage2') setLifeMsg(`✓ Stage 2 — inbound task ${r.taskId} (project ${r.projectId})`);
+      else if (action === 'stage3') setLifeMsg(`✓ Stage 3 — live${r.portalError ? ` ⚠ portal: ${r.portalError}` : ''}`);
+      else if (action === 'contacts') setLifeMsg(`✓ linked ${r.added?.length || 0} contact(s)`);
+    } catch (e: any) { setLifeMsg(`✗ ${e.message}`); }
+  }
+
+  function addContactsFn() {
+    const people = contactsText.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+      const m = l.match(/^(.*?)[<(]?\s*([\w.+-]+@[\w.-]+\.\w+)\s*[>)]?$/);
+      return m ? { name: m[1].trim().replace(/[,:-]\s*$/, '') || undefined, email: m[2] } : null;
+    }).filter(Boolean);
+    if (!people.length) { setLifeMsg('✗ Enter contacts as "Name <email>" per line.'); return; }
+    runOnboarding('contacts', { people }).then(() => setContactsText(''));
   }
 
   async function loadHistory(d: any) {
@@ -716,6 +742,24 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             </div>
           </div>
         )}
+      </div>
+
+      {/* ── Onboarding lifecycle (stages 2/3 + contacts) ───── */}
+      <div style={S.card}>
+        <h2 style={S.h2}>Onboarding lifecycle</h2>
+        <p style={{ fontSize: 12, color: '#7e8ca8', marginTop: -4 }}>
+          Acts on the dealership in the <b>Dealership ID</b> box below (card 1). Manual drivers until the email sweep auto-fires them.
+        </p>
+        <div style={S.row}>
+          <button style={S.btn} onClick={() => runOnboarding('stage2')}>Stage 2: integration approved → create inbound task</button>
+          <button style={S.btn} onClick={() => runOnboarding('stage3')}>Stage 3: complete → go live</button>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <label style={S.label}>Request contacts (one per line — &quot;Name &lt;email&gt;&quot;; MOC vs dealer auto-classified by domain)</label>
+          <textarea style={{ ...S.input, minHeight: 60, fontFamily: 'inherit' }} value={contactsText} onChange={(e) => setContactsText(e.target.value)} placeholder={'Jane Rep <jane@mocproducts.com>\nBob Service <bob@dealer.com>'} />
+          <button style={S.btnGhost} onClick={addContactsFn}>Link contacts</button>
+        </div>
+        {lifeMsg && <p style={{ color: lifeMsg.startsWith('✗') ? '#e5564b' : '#37c871', fontSize: 13, marginTop: 10 }}>{lifeMsg}</p>}
       </div>
 
       {/* ── 1 · Create a project ───────────────────────────── */}
