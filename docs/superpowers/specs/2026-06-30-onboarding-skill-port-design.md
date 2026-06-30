@@ -15,6 +15,8 @@ Two production apps already do real work. The orchestrator wraps them; it does n
 | **`MOC-Onboarding-Form`** | DMS authorization ("step 0"): creates the pending task, sends DMS-specific approval emails (Fortellis/Reynolds/Tekion/DealerVault), generates the signed PDF | **Feed Approval Pending** `901113435718` |
 | **`moc-setup-form`** | Setup ("step 1"): collects **users** (Excel-paste or typed rows), parts, techs, menus; builds `{Store}_Users.xlsx`; attaches to the task; comments + @mentions Blake & Nicolás; pre-loads the store list from Companies Inbound | **Companies Inbound** `901105435045` |
 
+**Reality check — email is the primary channel, not the forms.** The two forms are used **~1% of the time, if that.** The overwhelming majority of customer communication — the integration approvals, the user lists, the parts data that has to be added to the accounts — arrives by **email** (body text, Excel/PDF attachments, screenshots). So the true heart of this build is **orchestrating the flow of data from email → into the accounts/ClickUp**, with the forms as a rare high-fidelity shortcut. Even when a dealer *does* come in through a form, we still watch the email thread for the rest of the data. The roster extractor (§6) is therefore an **email-first** component.
+
 **The orchestrator's job is the connective tissue neither form provides:**
 1. **Source of truth** — mint Dealer ID (`DLR-`) + project id (`ONB-…`) and stamp them onto the form-created tasks.
 2. **Region** — detect it, set the plain-English MOC Region custom field (so it rides into Warranty Submissions), and push it to the portal dealer.
@@ -108,16 +110,19 @@ New `createOnboardingTask` in `lib/clickup.ts` (reusing the existing token + res
 
 ## 6. Roster extractor (the user collection)
 
-One extraction service, four inputs, one normalized roster — built once, reused everywhere.
+One extraction service, four inputs, one normalized roster — built once, reused everywhere. **Email is the primary input** (~99% of real volume); the form path is the rare shortcut.
 
-| Input | Method |
-|---|---|
-| Setup-form **typed** fields | structured JSON, **no AI**, highest fidelity |
-| Setup-form **Excel upload** | AI extraction |
-| Email plain text / Excel / docx | AI extraction |
-| PNG / screenshot | **Claude vision** |
+| Input | Share | Method |
+|---|---|---|
+| **Email plain text** (users typed in the body) | primary | AI extraction |
+| **Email attachment** — Excel / CSV / docx | primary | AI extraction |
+| **Email screenshot / PNG** | primary | **Claude vision** |
+| Setup-form **typed** fields | ~1% | structured JSON, **no AI**, highest fidelity |
+| Setup-form **Excel upload** | ~1% | AI extraction |
 
-**How the setup-form roster reaches the orchestrator:** extend `moc-setup-form`'s submit fan-out to **also POST the structured roster** to an orchestrator intake endpoint (keyed by the task's Dealer ID / project id). Fallback: the orchestrator reads the `{Store}_Users.xlsx` attachment off the ClickUp task. Always keep the original file attached to the task.
+**Email intake surface (the near-term bridge).** The full auto email-sweep is the comms arm (Phase 1, not built yet). Until then, the orchestrator gives the onboarding person an **email intake**: paste the email body and/or upload its attachments (Excel/PDF/PNG) against a dealership/project → the extractor runs → roster commits and the **original file is attached to the ClickUp task**. When the comms arm lands, it feeds the *same* extractor automatically — the manual intake is the interim front door, not throwaway work.
+
+**The rare form path.** When the setup form *is* used, extend `moc-setup-form`'s submit fan-out to **also POST the structured roster** to the orchestrator intake (keyed by Dealer ID / project id); fallback is reading the `{Store}_Users.xlsx` attachment off the task. Lower priority than the email intake given the ~1% usage. Always keep the original file attached to the task regardless of source.
 
 **Completeness — field-level, conditional on role × DMS** (locked matrix):
 
@@ -192,8 +197,11 @@ Buttons on the orchestrator page:
 - **Stage 2:** "Integration approved → promote" (complete pending, create/reconcile inbound task, send MOC data-request email).
 - **Stage 3:** "Mark complete → go live" (portal → live, send go-live email).
 - **"Parts & users onboarded → notify dealer."**
-- **Feed intake:** paste/upload + review table.
+- **Email intake (primary):** paste email body and/or upload attachments (Excel/PDF/PNG) against a dealership/project → roster extractor → commit + attach original to the task. This is the main day-to-day surface.
+- **Feed intake:** paste/upload + review table (the 5 DMS sources).
 - **Review queue.**
+
+Even for a form-originated dealer, the email intake stays active — we keep pulling the rest of the data from the thread.
 
 ---
 
@@ -207,7 +215,7 @@ No local Node/test runner. Verify via: Vercel build green; internal page actions
 
 A. Data model + region/brand detection + portal region + ID stamping on existing tasks.
 B. Task builder + 3-stage lifecycle + MS Graph emails + recipients model.
-C. Roster extractor (form intake + manual upload/AI/vision) + completeness matrix + missing-data paths + dealer notification.
+C. Roster extractor — **email-first**: email intake (paste body + upload Excel/PDF/PNG, AI/vision extraction) as the primary surface; form fan-out as the rare path; completeness matrix + missing-data paths + dealer notification.
 D. Feed ingesters (app-side parsers) + review table + agent-side scrape/address hooks + reconciliation.
 
 Each phase ends at an independently testable deliverable.
