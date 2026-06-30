@@ -87,3 +87,6 @@ comments, EZ-Wins group-naming rule. The orchestrator absorbs this as Phase 2.
   warranty letters human-reviewed forever · dealership = first-class persistent entity; projects end ·
   OEM = `oems[]` attribute · prefer partner API/webhook over email parsing where available ·
   work stays inside `~/Projects`, commit to `main`.
+
+## Pending migrations (run in orchestrator Neon)
+- migrations/2026-06-30-onboarding-port.sql — onboarding columns + contact/roster/action_queue/cadence tables
