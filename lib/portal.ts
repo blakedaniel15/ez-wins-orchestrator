@@ -100,6 +100,24 @@ export async function setPortalDealerGroup(portalDealerId: string, portalGroupId
   await putDealers(dealers);
 }
 
+// Set a portal dealer's region (plain English, e.g. "MOC NorCal"). Full-collection replace.
+export async function setPortalDealerRegion(portalDealerId: string, region: string): Promise<void> {
+  const dealers = await getDealers();
+  const t = dealers.find((d) => d.id === portalDealerId);
+  if (!t) throw new Error(`Dealer ${portalDealerId} not found in the portal.`);
+  (t as Dealer & { region?: string }).region = region;
+  await putDealers(dealers);
+}
+
+// Set a portal dealer's status (e.g. pipeline → live). Full-collection replace.
+export async function setPortalDealerStatus(portalDealerId: string, status: string): Promise<void> {
+  const dealers = await getDealers();
+  const t = dealers.find((d) => d.id === portalDealerId);
+  if (!t) throw new Error(`Dealer ${portalDealerId} not found in the portal.`);
+  (t as Dealer & { status?: string }).status = status;
+  await putDealers(dealers);
+}
+
 export async function writeProjectIdToDealer(dealerId: string, projectId: string): Promise<void> {
   const dealers = await getDealers();
   const target = dealers.find((d) => d.id === dealerId);

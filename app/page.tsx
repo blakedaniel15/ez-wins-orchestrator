@@ -156,6 +156,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [dlrConduit, setDlrConduit] = useState('');
   const [dlrOems, setDlrOems] = useState('');
   const [dlrPortalId, setDlrPortalId] = useState('');
+  const [dlrAddress, setDlrAddress] = useState('');
+  const [dlrCity, setDlrCity] = useState('');
+  const [dlrState, setDlrState] = useState('');
+  const [dlrZip, setDlrZip] = useState('');
   const [dlrResult, setDlrResult] = useState('');
   const [history, setHistory] = useState<{ dealership: any; projects: any[] } | null>(null);
   const [importMsg, setImportMsg] = useState('');
@@ -281,6 +285,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       body: JSON.stringify({
         name: dlrName, group_id: dlrGroupId || null, dms: dlrDms || null,
         conduit: dlrConduit || null, oems, portal_dealer_id: dlrPortalId || null,
+        address: dlrAddress || null, city: dlrCity || null, state: dlrState || null, zip: dlrZip || null,
       }),
     }).then((x) => x.json());
     if (r.ok) {
@@ -289,8 +294,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         : r.portalError
           ? `· ⚠ portal: ${r.portalError}`
           : '';
-      setDlrResult(`✓ ${r.dealership.id} ${p}`);
+      const reg = r.dealership.region ? ` · region ${r.dealership.region}` : '';
+      setDlrResult(`✓ ${r.dealership.id}${reg} ${p}`);
       setDlrName(''); setDlrDms(''); setDlrConduit(''); setDlrOems(''); setDlrPortalId('');
+      setDlrAddress(''); setDlrCity(''); setDlrState(''); setDlrZip('');
       setProjDealershipId(r.dealership.id);
       loadEntities();
     } else {
@@ -643,6 +650,22 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           <div style={{ flex: '1 1 200px' }}>
             <label style={S.label}>Portal dealer ID (blank = auto)</label>
             <input style={{ ...S.input, ...S.mono }} value={dlrPortalId} onChange={(e) => setDlrPortalId(e.target.value)} placeholder="blank → orchestrator creates/links" />
+          </div>
+          <div style={{ flex: '1 1 220px' }}>
+            <label style={S.label}>Street address</label>
+            <input style={S.input} value={dlrAddress} onChange={(e) => setDlrAddress(e.target.value)} placeholder="123 Auto Mall Dr" />
+          </div>
+          <div style={{ flex: '1 1 140px' }}>
+            <label style={S.label}>City</label>
+            <input style={S.input} value={dlrCity} onChange={(e) => setDlrCity(e.target.value)} placeholder="Modesto" />
+          </div>
+          <div style={{ flex: '1 1 80px' }}>
+            <label style={S.label}>State</label>
+            <input style={S.input} value={dlrState} onChange={(e) => setDlrState(e.target.value)} placeholder="CA" />
+          </div>
+          <div style={{ flex: '1 1 90px' }}>
+            <label style={S.label}>Zip</label>
+            <input style={S.input} value={dlrZip} onChange={(e) => setDlrZip(e.target.value)} placeholder="95350" />
           </div>
           <button style={S.btn} onClick={createDealershipFn}>Create dealership</button>
         </div>

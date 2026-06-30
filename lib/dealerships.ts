@@ -11,6 +11,16 @@ export interface Dealership {
   portal_dealer_id: string | null;
   status: string;
   substate: Record<string, unknown>;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
+  region: string | null;
+  brand: string | null;
+  door_rate: string;
+  platform_fields: Record<string, unknown>;
+  lifecycle_stage: string;
+  parts_users_onboarded: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -23,18 +33,54 @@ export async function createDealership(input: {
   oems?: string[];
   portal_dealer_id?: string | null;
   status?: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+  region?: string | null;
+  brand?: string | null;
+  platform_fields?: Record<string, unknown>;
+  lifecycle_stage?: string;
 }): Promise<Dealership> {
   const id = await mintDealershipId();
   const rows = (await sql`
-    insert into dealership (id, group_id, name, dms, conduit, oems, portal_dealer_id, status)
+    insert into dealership (
+      id, group_id, name, dms, conduit, oems, portal_dealer_id, status,
+      address, city, state, zip, region, brand, platform_fields, lifecycle_stage
+    )
     values (
       ${id}, ${input.group_id || null}, ${input.name}, ${input.dms || null}, ${input.conduit || null},
       ${JSON.stringify(input.oems || [])}::jsonb, ${input.portal_dealer_id || null},
-      ${input.status || 'prospect'}
+      ${input.status || 'prospect'},
+      ${input.address || null}, ${input.city || null}, ${input.state || null}, ${input.zip || null},
+      ${input.region || null}, ${input.brand || null},
+      ${JSON.stringify(input.platform_fields || {})}::jsonb, ${input.lifecycle_stage || 'pending'}
     )
     returning *
   `) as Dealership[];
   return rows[0];
+}
+
+export async function setDealershipOnboarding(
+  id: string,
+  f: Partial<Pick<Dealership, 'address' | 'city' | 'state' | 'zip' | 'region' | 'brand' | 'lifecycle_stage' | 'parts_users_onboarded'>> & { platform_fields?: Record<string, unknown> }
+): Promise<Dealership | null> {
+  const rows = (await sql`
+    update dealership set
+      address = coalesce(${f.address ?? null}::text, address),
+      city = coalesce(${f.city ?? null}::text, city),
+      state = coalesce(${f.state ?? null}::text, state),
+      zip = coalesce(${f.zip ?? null}::text, zip),
+      region = coalesce(${f.region ?? null}::text, region),
+      brand = coalesce(${f.brand ?? null}::text, brand),
+      lifecycle_stage = coalesce(${f.lifecycle_stage ?? null}::text, lifecycle_stage),
+      parts_users_onboarded = coalesce(${f.parts_users_onboarded ?? null}::boolean, parts_users_onboarded),
+      platform_fields = coalesce(${f.platform_fields ? JSON.stringify(f.platform_fields) : null}::jsonb, platform_fields),
+      updated_at = now()
+    where id = ${id}
+    returning *
+  `) as Dealership[];
+  return rows[0] || null;
 }
 
 export async function getDealership(id: string): Promise<Dealership | null> {
