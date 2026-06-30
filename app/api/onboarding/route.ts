@@ -43,11 +43,11 @@ export async function POST(req: NextRequest) {
         const g = await getGroup(d.group_id);
         ownerGroupName = g?.name || null;
       }
-      const { taskId } = await createOnboardingTask({ dealership: d, projectId: proj.id, listId: COMPANIES_INBOUND, ownerGroupName });
+      const { taskId, warning } = await createOnboardingTask({ dealership: d, projectId: proj.id, listId: COMPANIES_INBOUND, ownerGroupName });
       await setProjectRefs(proj.id, { clickup_task_id: taskId });
       await setDealershipOnboarding(d.id, { lifecycle_stage: 'inbound' });
-      await logDecision({ kind: 'lifecycle', type: 'onboarding', dealership_id: d.id, decision: 'stage2', detail: { taskId } });
-      return NextResponse.json({ ok: true, taskId, projectId: proj.id });
+      await logDecision({ kind: 'lifecycle', type: 'onboarding', dealership_id: d.id, decision: 'stage2', detail: { taskId, warning } });
+      return NextResponse.json({ ok: true, taskId, projectId: proj.id, warning });
     }
 
     if (b.action === 'stage3') {

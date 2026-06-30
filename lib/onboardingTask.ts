@@ -18,7 +18,7 @@ export async function createOnboardingTask(input: {
   projectId: string;
   listId: string;
   ownerGroupName?: string | null;
-}): Promise<{ taskId: string }> {
+}): Promise<{ taskId: string; warning?: string }> {
   const d = input.dealership;
   const platform = PLATFORM_BY_CONDUIT[d.conduit || ''] || 'Fortellis';
   const name = titleCase(d.name);
@@ -35,12 +35,20 @@ export async function createOnboardingTask(input: {
     platform_fields: d.platform_fields || {},
   });
   const taskId = await createTask(input.listId, { name, description, task_type: 'Branch' });
-  // Stamp the universal IDs (best-effort dealer id, then project id).
+  // Stamp the universal IDs.
   await writeDealerIdField(taskId, d.id);
   await writeProjectIdField(taskId, input.projectId);
   // MOC Region only when resolved (skip 'ASK' — it waits in the review queue).
-  if (d.region && d.region !== 'ASK') await writeMocRegionField(taskId, d.region);
-  return { taskId };
+  // Best-effort: a missing 'MOC Region' field must not fail task creation.
+  let warning: string | undefined;
+  if (d.region && d.region !== 'ASK') {
+    try {
+      await writeMocRegionField(taskId, d.region);
+    } catch (e) {
+      warning = `MOC Region not set: ${(e as Error).message}`;
+    }
+  }
+  return { taskId, warning };
 }
 
 export async function completeOnboardingTask(taskId: string): Promise<void> {

@@ -316,7 +316,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         body: JSON.stringify({ action, dealershipId: projDealershipId, ...extra }),
       }).then((x) => x.json());
       if (!r.ok) { setLifeMsg(`✗ ${r.error || 'Failed.'}`); return; }
-      if (action === 'stage2') setLifeMsg(`✓ Stage 2 — inbound task ${r.taskId} (project ${r.projectId})`);
+      if (action === 'stage2') setLifeMsg(`✓ Stage 2 — inbound task ${r.taskId} (project ${r.projectId})${r.warning ? ` ⚠ ${r.warning}` : ''}`);
       else if (action === 'stage3') setLifeMsg(`✓ Stage 3 — live${r.portalError ? ` ⚠ portal: ${r.portalError}` : ''}`);
       else if (action === 'contacts') setLifeMsg(`✓ linked ${r.added?.length || 0} contact(s)`);
     } catch (e: any) { setLifeMsg(`✗ ${e.message}`); }
