@@ -24,7 +24,9 @@ Two production apps already do real work. The orchestrator wraps them; it does n
 4. **Roster extractor** — ingest the users the setup form already attached; apply the role×DMS completeness matrix; run missing-email reach-back + dealer notification.
 5. **Reconciliation** — match form-created tasks back to projects and stamp the IDs.
 
-**Out of scope (later phases):** the comms arm (auto email sweep/classification) — so every lifecycle transition is **manual** for now (buttons in the orchestrator UI). Warranty RO-line classification stays in `AI-Warranty-Analyst`.
+**In scope (Blake's call to pull forward):** the **comms arm** — the email sweep + classification (§2.5) — is now part of this plan, absorbing and retiring `ez-wins-email-assistant`. So lifecycle transitions become **email-driven** (auto), with the manual buttons kept as a fallback/override.
+
+**Out of scope (later plans):** deep support/investigation/warranty handling (the comms arm classifies all four types and keeps support/warranty at the assistant's *current* behavior so it can retire, but only **onboarding** is wired deeply here). Warranty RO-line classification stays in `AI-Warranty-Analyst`.
 
 ---
 
@@ -53,7 +55,30 @@ Later    Parts & users all onboarded (separate readiness flag)
          → EMAIL the dealership employees linked to the store
 ```
 
-Every arrow that says "→ EMAIL" or moves a task/stage is, for now, a **button** in the orchestrator (no comms arm yet). When Phase 1 lands, the same transitions fire automatically off detected emails.
+Each arrow is **email-driven** once the comms arm (§2.5) is live: a detected MOC intro fires Stage 1, a detected integration-approval email fires Stage 2, and a ClickUp task-complete fires Stage 3. Phases A/B build these as **manual buttons** first (so they're testable before the sweep); C/D make them automatic, with the buttons kept as overrides.
+
+---
+
+## 2.5 The comms arm — the front door (absorbed from `ez-wins-email-assistant`)
+
+Email is the real channel, so the orchestrator grows an **email sweep** that becomes the automatic trigger for the whole lifecycle. We **absorb and retire** the existing `ez-wins-email-assistant` — no parallel running (or double tasks/drafts).
+
+**What ports cleanly (reuse):**
+- **MS Graph client** (`lib/graph.js`) — client-credentials auth (`MS_TENANT_ID/CLIENT_ID/CLIENT_SECRET/MS_USER_EMAIL`), thread fetch, draft creation, signature append.
+- **Cadence engine** (`lib/followups.js`) — the onboarding follow-up ladder (nudge +2/+3/+3 bd → last-ditch → MOC-rep +3bd → "call them" Planner +5bd), business-day math in CT, anchored on send, stops on any reply or stage advance. **Generalize to per-type tracks** (execution-plan §cadence).
+- **Classification prompt** (`lib/email_assistant_prompt.md`, ~986 lines) — port the rules as the classifier; it already recognizes onboarding intros (RULE 6D), support requests, noise, and "already replied."
+
+**What we rebuild / add:**
+- **Sweep loop** — Vercel cron (port the existing schedule), 1.5 h lookback, dedup via Outlook **category tags** (`EZ-Assistant-Processed` + outcome tags). Re-key every email by **`conversationId` → project** (the keystone): an email either attaches to an existing project or mints one.
+- **Classification covers all four types** (onboarding/support/investigation/warranty-request) → so the assistant retires without regression. **This plan wires onboarding deeply; support/warranty stay at the assistant's current behavior** (classify → task → draft → cadence) and deepen in later plans.
+- **Concrete DMS-approval triggers** — the assistant recognizes onboarding *intent* via the prompt but does **not** hard-match the integration-approval emails. We add explicit detectors for the **Stage 2** trigger, built from the real samples in `docs/reference/dms-samples/` (Fortellis "Activation Details", Reynolds RCI deployment confirmation, Tekion "Integration Confirmed", DealerVault "Feed Activated"). Detecting one of these auto-advances the project pending → inbound.
+- **The OUTBOX (action queue)** — replaces drafts-in-the-Outlook-folder. Proposed actions (draft reply, create/advance task, reach-back, send-welcome, internal-pull) land in a Neon `action_queue` with a UI for **approve / edit / reject**, and the decision logs to `decision_log` (RAG substrate). Drafts-first for everything at this stage.
+- **Structured extraction** — the assistant does **no** content parsing of attachments; the roster extractor (§6) is net-new and the sweep feeds it (email body + Excel/PDF/PNG → roster).
+- **Real send (MS Graph)** — the assistant never sends; §7 adds `sendMail`. Verify **Mail.Send** first.
+
+**Storage shift:** the assistant kept only Redis (follow-up state + activity log) and no DB. In the orchestrator, projects/roster/queue live in **Neon**; Redis stays for cadence state + admin sessions.
+
+**Cutover:** ship the comms arm, confirm parity on a live sweep, then switch the old assistant **off** (disable its crons) before relying on the orchestrator — never both.
 
 ---
 
@@ -80,7 +105,11 @@ Every arrow that says "→ EMAIL" or moves a task/stage is, for now, a **button*
   `dms_id`, `source` (form_typed/form_upload/email_text/email_attachment/email_image),
   `confidence`, `missing` (array), `action` (none/reach_back/internal_id_pull/clear_manually)
 
-**`decision_log`** (exists) — every confirm/correct on region, group match, roster row.
+**`action_queue`** (the OUTBOX) — `project_id`, `kind` (draft_reply/create_task/reach_back/send_welcome/login_prompt/internal_pull), `proposed_payload` jsonb, `state` (pending/approved/edited/rejected/sent), `decision_log`, timestamps.
+
+**`cadence`** (follow-up engine state, generalized from `lib/followups.js`) — `project_id`, `type`, `track` (customer/moc_rep/missing_email/integration_chase), `anchor_sent_at`, `next_due`, `step`, `stopped_reason`. (Redis may back the live counters as today; Neon holds the durable record.)
+
+**`decision_log`** (exists) — every confirm/correct on region, group match, roster row, or OUTBOX action.
 
 ---
 
@@ -144,7 +173,7 @@ Parsing realities to handle (from real samples): IDs in parens inside the name a
 
 ## 7. Email sending (MS Graph, real send)
 
-New `lib/email.ts` sends via **MS Graph** (client-credentials, MS env vars already in Vercel) from Blake's mailbox. Three events:
+New `lib/email.ts` sends via **MS Graph** (client-credentials, reusing the ported `lib/graph.js` auth) from Blake's mailbox. **This is net-new — the email assistant only ever drafted, never sent** — so Mail.Send is the one new permission to confirm. Outbound still routes through the OUTBOX (drafts-first); "send" is the approved action. Three events:
 
 1. **Stage 2 — MOC data request.** To the MOC employees on the request. Body: "send us the data to finish onboarding," includes the **setup-form link** (per-dealership, pre-fillable).
 2. **Stage 3 — go-live.** To the original users on the request. Announces the store/group is live.
@@ -192,7 +221,7 @@ The single human-in-the-loop surface for everything flagged:
 
 ## 11. UI surfaces (manual triggers, until Phase 1)
 
-Buttons on the orchestrator page:
+The **OUTBOX (action queue)** is the primary surface once the comms arm is live — swept emails produce proposed actions (draft replies, task create/advance, reach-backs, sends) that you approve / edit / reject. The buttons below remain as manual overrides for when you want to drive a transition by hand:
 - **Stage 1:** open deal / create dealership (mostly exists) — now also captures address + contacts, auto-detects region.
 - **Stage 2:** "Integration approved → promote" (complete pending, create/reconcile inbound task, send MOC data-request email).
 - **Stage 3:** "Mark complete → go live" (portal → live, send go-live email).
@@ -213,16 +242,20 @@ No local Node/test runner. Verify via: Vercel build green; internal page actions
 
 ## 13. Build phases (one plan, sequenced)
 
-A. Data model + region/brand detection + portal region + ID stamping on existing tasks.
-B. Task builder + 3-stage lifecycle + MS Graph emails + recipients model.
-C. Roster extractor — **email-first**: email intake (paste body + upload Excel/PDF/PNG, AI/vision extraction) as the primary surface; form fan-out as the rare path; completeness matrix + missing-data paths + dealer notification.
-D. Feed ingesters (app-side parsers) + review table + agent-side scrape/address hooks + reconciliation.
+A. **Data model** + region/brand detection + portal region + ID stamping on existing tasks.
+B. **Task builder** + 3-stage lifecycle + recipients model (manual-button driven first, so it's testable before the sweep).
+C. **Comms arm** — port `lib/graph.js` + the classification prompt; sweep loop (cron, conversationId→project keying); the **OUTBOX/action_queue** UI (approve/edit/reject); concrete DMS-approval detectors (Stage 2 auto-advance); generalize the cadence engine. Classify all four types; wire onboarding deeply, keep support/warranty at parity. **Cutover: retire the email assistant.**
+D. **MS Graph real send** — `lib/email.ts` (Mail.Send), wired to the three lifecycle emails + roster reach-back, routed through the OUTBOX.
+E. **Roster extractor** — email-first: the sweep feeds it (body + Excel/PDF/PNG via AI/vision); manual email intake as fallback; form fan-out as the ~1% path; completeness matrix + missing-data paths + dealer notification.
+F. **Feed ingesters** (app-side parsers) + review table + agent-side scrape/address hooks + reconciliation.
 
-Each phase ends at an independently testable deliverable.
+Each phase ends at an independently testable deliverable. A/B ship value before the comms arm exists; C/D retire the assistant and make it email-driven; E/F complete the data flow.
 
 ---
 
 ## 14. Open items to confirm during build
-- **MS Graph sender + Mail.Send permission** (else Resend fallback).
+- **MS Graph sender + Mail.Send permission** (else Resend fallback) — the new send capability.
+- **Email-assistant cutover** — confirm parity on a live sweep, then disable the assistant's crons before the orchestrator goes live. Never run both.
+- **Classification prompt reuse** — port `email_assistant_prompt.md` as-is vs. trim to the four-type classifier (default: port as-is, extend for investigation/warranty).
 - **`moc-setup-form` fan-out extension** — POST roster to orchestrator vs read the `_Users.xlsx` attachment (default: extend the fan-out).
 - Whether the dealer-notification recipients are the **request** dealer contacts or the **roster** users (default: the roster users actually provisioned).
