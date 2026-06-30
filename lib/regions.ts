@@ -1,27 +1,52 @@
+// Region detection — outputs the EZ Wins PORTAL taxonomy (the single source of
+// truth, from ez-wins-portal REGIONS_TABLE). The same value is written to the
+// portal dealer AND the ClickUp "MOC Region" field, so there is one vocabulary
+// across systems. 'ASK' means ambiguous/unknown → goes to the review queue,
+// never written to the portal (which would create a junk region entry).
+
 export const REGIONS = [
-  'MOC NorCal', 'MOC SoCal', 'MOC PNW', 'MOC Central',
-  'MOC Mid-Atlantic', 'MOC Canada', 'Other Distributors',
+  'Canada', 'Central', 'Colorado', 'Iowa', 'NorCal', 'Northeast',
+  'Other', 'PNW', 'SoCal', 'Southeast', 'Utah', 'Distrubitor (Non-MOC)',
 ] as const;
 
 const FULL_TO_ABBR: Record<string, string> = {
-  california: 'CA', nevada: 'NV', oregon: 'OR', washington: 'WA', montana: 'MT', idaho: 'ID',
-  colorado: 'CO', texas: 'TX', wyoming: 'WY', 'new mexico': 'NM', oklahoma: 'OK', louisiana: 'LA',
-  mississippi: 'MS', 'north carolina': 'NC', 'south carolina': 'SC', virginia: 'VA', maryland: 'MD',
-  'west virginia': 'WV', georgia: 'GA', indiana: 'IN', arizona: 'AZ', utah: 'UT', hawaii: 'HI',
+  alabama: 'AL', alaska: 'AK', arizona: 'AZ', arkansas: 'AR', california: 'CA', colorado: 'CO',
+  connecticut: 'CT', delaware: 'DE', florida: 'FL', georgia: 'GA', hawaii: 'HI', idaho: 'ID',
+  illinois: 'IL', indiana: 'IN', iowa: 'IA', kansas: 'KS', kentucky: 'KY', louisiana: 'LA',
+  maine: 'ME', maryland: 'MD', massachusetts: 'MA', michigan: 'MI', minnesota: 'MN',
+  mississippi: 'MS', missouri: 'MO', montana: 'MT', nebraska: 'NE', nevada: 'NV',
+  'new hampshire': 'NH', 'new jersey': 'NJ', 'new mexico': 'NM', 'new york': 'NY',
+  'north carolina': 'NC', 'north dakota': 'ND', ohio: 'OH', oklahoma: 'OK', oregon: 'OR',
+  pennsylvania: 'PA', 'rhode island': 'RI', 'south carolina': 'SC', 'south dakota': 'SD',
+  tennessee: 'TN', texas: 'TX', utah: 'UT', vermont: 'VT', virginia: 'VA', washington: 'WA',
+  'west virginia': 'WV', wisconsin: 'WI', wyoming: 'WY',
 };
 
+// State → portal region. CA and NV are resolved by city (below), not here.
 const STATE_TO_REGION: Record<string, string> = {
-  OR: 'MOC PNW', WA: 'MOC PNW', MT: 'MOC PNW', ID: 'MOC PNW',
-  CO: 'MOC Central', TX: 'MOC Central', WY: 'MOC Central', NM: 'MOC Central',
-  OK: 'MOC Central', LA: 'MOC Central', MS: 'MOC Central',
-  NC: 'MOC Mid-Atlantic', SC: 'MOC Mid-Atlantic', VA: 'MOC Mid-Atlantic',
-  MD: 'MOC Mid-Atlantic', WV: 'MOC Mid-Atlantic',
+  // PNW
+  OR: 'PNW', WA: 'PNW', MT: 'PNW', ID: 'PNW',
+  // Central (Austin/DFW/Houston/Louisiana are its portal sub-regions)
+  TX: 'Central', LA: 'Central', OK: 'Central', NM: 'Central', AR: 'Central',
+  // standalone geographic buckets the portal splits out
+  CO: 'Colorado', UT: 'Utah', IA: 'Iowa',
+  // Northeast
+  NY: 'Northeast', NJ: 'Northeast', CT: 'Northeast', MA: 'Northeast', ME: 'Northeast',
+  NH: 'Northeast', VT: 'Northeast', RI: 'Northeast', PA: 'Northeast', MD: 'Northeast',
+  DE: 'Northeast', WV: 'Northeast', VA: 'Northeast',
+  // Southeast
+  GA: 'Southeast', FL: 'Southeast', NC: 'Southeast', SC: 'Southeast', TN: 'Southeast',
+  AL: 'Southeast', KY: 'Southeast', MS: 'Southeast',
+  // Other (everything else, explicitly mapped so unknown codes fall through to ASK)
+  AZ: 'Other', HI: 'Other', IN: 'Other', OH: 'Other', MI: 'Other', WI: 'Other', MN: 'Other',
+  KS: 'Other', NE: 'Other', MO: 'Other', SD: 'Other', ND: 'Other', AK: 'Other', IL: 'Other', WY: 'Other',
 };
-const CANADA = new Set(['AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'ON', 'PE', 'QC', 'SK']);
+
+const CANADA = new Set(['AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'ON', 'PE', 'QC', 'SK', 'NT', 'YT', 'NU']);
 
 // CA: NorCal = Bay Area & north (Salinas+); SoCal = LA & south. Central valley = ASK.
-const CA_NORCAL = new Set(['san francisco', 'oakland', 'san jose', 'sacramento', 'salinas', 'santa rosa', 'berkeley', 'fremont', 'concord', 'modesto', 'stockton']);
-const CA_SOCAL = new Set(['los angeles', 'san diego', 'irvine', 'anaheim', 'long beach', 'riverside', 'san bernardino', 'santa ana', 'pasadena', 'torrance']);
+const CA_NORCAL = new Set(['san francisco', 'oakland', 'san jose', 'sacramento', 'salinas', 'santa rosa', 'berkeley', 'fremont', 'concord', 'modesto', 'stockton', 'walnut creek', 'milpitas', 'rocklin']);
+const CA_SOCAL = new Set(['los angeles', 'san diego', 'irvine', 'anaheim', 'long beach', 'riverside', 'san bernardino', 'santa ana', 'pasadena', 'torrance', 'escondido', 'duarte']);
 const CA_ASK = new Set(['fresno', 'bakersfield', 'visalia', 'merced', 'clovis']);
 
 function abbr(state: string): string {
@@ -33,20 +58,17 @@ function abbr(state: string): string {
 export function detectRegion(state: string, city: string): string {
   const st = abbr(state);
   const c = (city || '').trim().toLowerCase();
-  if (CANADA.has(st)) return 'MOC Canada';
+  if (CANADA.has(st)) return 'Canada';
   if (st === 'CA') {
     if (CA_ASK.has(c)) return 'ASK';
-    if (CA_SOCAL.has(c)) return 'MOC SoCal';
-    if (CA_NORCAL.has(c)) return 'MOC NorCal';
+    if (CA_SOCAL.has(c)) return 'SoCal';
+    if (CA_NORCAL.has(c)) return 'NorCal';
     return 'ASK';
   }
   if (st === 'NV') {
-    if (c.includes('reno') || c.includes('sparks') || c.includes('carson')) return 'MOC NorCal';
-    if (c.includes('vegas') || c.includes('henderson')) return 'MOC SoCal';
+    if (c.includes('reno') || c.includes('sparks') || c.includes('carson')) return 'NorCal';
+    if (c.includes('vegas') || c.includes('henderson')) return 'SoCal';
     return 'ASK';
   }
-  if (STATE_TO_REGION[st]) return STATE_TO_REGION[st];
-  const OTHER = new Set(['GA', 'IN', 'AZ', 'UT', 'HI', 'FL', 'OH', 'MI', 'PA', 'TN', 'KY', 'AL', 'MO', 'KS', 'NE', 'AR', 'SD', 'ND', 'MN', 'WI', 'IL', 'IA', 'NY', 'NJ', 'CT', 'MA', 'ME', 'NH', 'VT', 'RI', 'DE', 'AK']);
-  if (OTHER.has(st)) return 'Other Distributors';
-  return 'ASK';
+  return STATE_TO_REGION[st] || 'ASK';
 }

@@ -12,18 +12,22 @@ import { classifyKind, parseContactLines } from './contacts';
 register('harness', () => [eq('1+1', 2, 1 + 1)]);
 
 register('regions', () => [
-  eq('OR→PNW', 'MOC PNW', detectRegion('OR', 'Portland')),
-  eq('TX→Central', 'MOC Central', detectRegion('TX', 'Houston')),
-  eq('NC→Mid-Atlantic', 'MOC Mid-Atlantic', detectRegion('NC', 'Charlotte')),
-  eq('CA SF→NorCal', 'MOC NorCal', detectRegion('CA', 'San Francisco')),
-  eq('CA LA→SoCal', 'MOC SoCal', detectRegion('CA', 'Los Angeles')),
-  eq('NV Reno→NorCal', 'MOC NorCal', detectRegion('NV', 'Reno')),
-  eq('NV Vegas→SoCal', 'MOC SoCal', detectRegion('NV', 'Las Vegas')),
+  eq('OR→PNW', 'PNW', detectRegion('OR', 'Portland')),
+  eq('TX→Central', 'Central', detectRegion('TX', 'Houston')),
+  eq('NC→Southeast', 'Southeast', detectRegion('NC', 'Charlotte')),
+  eq('NY→Northeast', 'Northeast', detectRegion('NY', 'Albany')),
+  eq('CO→Colorado', 'Colorado', detectRegion('CO', 'Denver')),
+  eq('IA→Iowa', 'Iowa', detectRegion('IA', 'Des Moines')),
+  eq('CA SF→NorCal', 'NorCal', detectRegion('CA', 'San Francisco')),
+  eq('CA LA→SoCal', 'SoCal', detectRegion('CA', 'Los Angeles')),
+  eq('NV Reno→NorCal', 'NorCal', detectRegion('NV', 'Reno')),
+  eq('NV Vegas→SoCal', 'SoCal', detectRegion('NV', 'Las Vegas')),
   eq('CA Fresno→ASK', 'ASK', detectRegion('CA', 'Fresno')),
-  eq('GA→Other', 'Other Distributors', detectRegion('GA', 'Atlanta')),
-  eq('UT→Other', 'Other Distributors', detectRegion('UT', 'Logan')),
+  eq('GA→Southeast', 'Southeast', detectRegion('GA', 'Atlanta')),
+  eq('UT→Utah', 'Utah', detectRegion('UT', 'Logan')),
+  eq('AZ→Other', 'Other', detectRegion('AZ', 'Phoenix')),
   eq('unmapped→ASK', 'ASK', detectRegion('ZZ', 'Nowhere')),
-  eq('full state name', 'Other Distributors', detectRegion('Utah', 'Logan')),
+  eq('full state name', 'Utah', detectRegion('Utah', 'Logan')),
 ]);
 
 register('brands', () => [
