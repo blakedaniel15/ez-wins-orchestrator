@@ -67,6 +67,13 @@ const TYPES = [
   { v: 'investigation', label: 'Investigation (INV)' },
 ];
 
+const DMS_OPTIONS = ['', 'CDK', 'Reynolds', 'Tekion', 'DealerTrack', 'AutoMate', 'PBS', 'Dealerbuilt', 'Other'];
+const CONDUIT_OPTIONS = ['', 'direct', 'fortellis', 'dealervault', 'tekion', 'reynolds_rci'];
+const DMS_CONDUIT: Record<string, string> = {
+  CDK: 'fortellis', Reynolds: 'reynolds_rci', Tekion: 'tekion',
+  DealerTrack: 'dealervault', AutoMate: 'dealervault', PBS: 'dealervault', Dealerbuilt: 'dealervault', Other: 'direct',
+};
+
 function dot(s: Status) {
   const color = s === 'ok' ? '#37c871' : s === 'fail' ? '#e5564b' : s === 'running' ? '#d9a441' : '#3a4a66';
   return <span style={{ ...S.pill(color), color: '#06101e' }}>{s === 'idle' ? '•' : s.toUpperCase()}</span>;
@@ -565,7 +572,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
               <input style={S.input} value={assignStore} onChange={(e) => setAssignStore(e.target.value)} placeholder="store name (e.g. Concord CDJR)" />
             </div>
             <div style={{ flex: '1 1 110px' }}>
-              <input style={S.input} value={assignDms} onChange={(e) => setAssignDms(e.target.value)} placeholder="DMS" />
+              <select style={S.input} value={assignDms} onChange={(e) => setAssignDms(e.target.value)}>
+                {DMS_OPTIONS.map((o) => (
+                  <option key={o} value={o}>{o || 'DMS —'}</option>
+                ))}
+              </select>
             </div>
             <button style={S.btn} onClick={getSuggestions}>Suggest groups</button>
           </div>
@@ -603,11 +614,27 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           </div>
           <div style={{ flex: '1 1 110px' }}>
             <label style={S.label}>DMS</label>
-            <input style={S.input} value={dlrDms} onChange={(e) => setDlrDms(e.target.value)} placeholder="CDK" />
+            <select
+              style={S.input}
+              value={dlrDms}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDlrDms(v);
+                if (DMS_CONDUIT[v]) setDlrConduit(DMS_CONDUIT[v]);
+              }}
+            >
+              {DMS_OPTIONS.map((o) => (
+                <option key={o} value={o}>{o || '— select —'}</option>
+              ))}
+            </select>
           </div>
           <div style={{ flex: '1 1 110px' }}>
             <label style={S.label}>Conduit</label>
-            <input style={S.input} value={dlrConduit} onChange={(e) => setDlrConduit(e.target.value)} placeholder="fortellis" />
+            <select style={S.input} value={dlrConduit} onChange={(e) => setDlrConduit(e.target.value)}>
+              {CONDUIT_OPTIONS.map((o) => (
+                <option key={o} value={o}>{o || '— select —'}</option>
+              ))}
+            </select>
           </div>
           <div style={{ flex: '1 1 160px' }}>
             <label style={S.label}>OEMs (comma-sep)</label>
