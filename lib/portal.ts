@@ -100,7 +100,7 @@ export async function setPortalDealerGroup(portalDealerId: string, portalGroupId
   await putDealers(dealers);
 }
 
-// Set a portal dealer's region (plain English, e.g. "MOC NorCal"). Full-collection replace.
+// Set a portal dealer's region (portal taxonomy, e.g. "NorCal"). Full-collection replace.
 export async function setPortalDealerRegion(portalDealerId: string, region: string): Promise<void> {
   const dealers = await getDealers();
   const t = dealers.find((d) => d.id === portalDealerId);

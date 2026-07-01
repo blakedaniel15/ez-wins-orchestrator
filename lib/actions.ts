@@ -57,7 +57,7 @@ export async function decideAction(
     update action_queue set
       state = ${state},
       proposed_payload = coalesce(${payload ? JSON.stringify(payload) : null}::jsonb, proposed_payload),
-      decision = ${JSON.stringify({ state, at: 'now' })}::jsonb,
+      decision = ${JSON.stringify({ state, at: new Date().toISOString() })}::jsonb,
       updated_at = now()
     where id = ${id}
     returning *
