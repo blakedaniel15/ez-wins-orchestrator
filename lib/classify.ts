@@ -49,20 +49,37 @@ function serializeThread(thread: Msg[]): string {
     .join('\n\n');
 }
 
-// Strip ```json fences and parse. Throws on invalid JSON so the sweep can skip/retry.
+// Strip ```json fences and parse. If the whole string isn't valid JSON (e.g. stray
+// prose or a slightly-off wrapper), fall back to the outermost {...} object.
 function parseDecision(text: string): Decision {
   const cleaned = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  return JSON.parse(cleaned) as Decision;
+  try {
+    return JSON.parse(cleaned) as Decision;
+  } catch {
+    const s = cleaned.indexOf('{');
+    const e = cleaned.lastIndexOf('}');
+    if (s >= 0 && e > s) return JSON.parse(cleaned.slice(s, e + 1)) as Decision;
+    throw new Error(`classifier returned unparseable output: ${cleaned.slice(0, 120)}…`);
+  }
 }
 
 export async function classifyEmail(thread: Msg[]): Promise<Decision> {
-  const res = await client().messages.create({
-    model: MODEL,
-    max_tokens: 2000,
-    system: prompt(),
-    messages: [{ role: 'user', content: serializeThread(thread) }],
-  });
-  const block = res.content.find((b) => b.type === 'text');
-  const text = block && block.type === 'text' ? block.text : '';
-  return parseDecision(text);
+  let lastErr: Error | null = null;
+  // Retry once — covers a transient API blip or a rare truncated/garbled response.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await client().messages.create({
+        model: MODEL,
+        max_tokens: 4000, // decisions carry a full draft + task description; 2000 could truncate → invalid JSON
+        system: prompt(),
+        messages: [{ role: 'user', content: serializeThread(thread) }],
+      });
+      const block = res.content.find((b) => b.type === 'text');
+      const text = block && block.type === 'text' ? block.text : '';
+      return parseDecision(text);
+    } catch (e) {
+      lastErr = e as Error;
+    }
+  }
+  throw lastErr || new Error('classification failed');
 }
