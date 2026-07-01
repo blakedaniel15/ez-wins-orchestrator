@@ -1,4 +1,5 @@
 import { sql } from '@/lib/db';
+import { enqueueAction } from '@/lib/actions';
 
 // Generalized follow-up cadence, ported from ez-wins-email-assistant/lib/followups.js.
 // The onboarding ladder (business days unless noted), anchored on when the first
@@ -111,4 +112,21 @@ export async function advanceCadence(c: Cadence): Promise<void> {
 
 export async function stopCadence(projectId: string, reason: string): Promise<void> {
   await sql`update cadence set stopped_reason = ${reason}, updated_at = now() where project_id = ${projectId} and stopped_reason is null`;
+}
+
+// Cron tick: for each due cadence, propose the step's nudge to the OUTBOX (drafts-first)
+// and advance the ladder. Reply/stage-advance stops are applied via stopCadence elsewhere.
+export async function tickCadence(now: Date): Promise<{ fired: number }> {
+  const due = await dueCadences(now);
+  for (const c of due) {
+    const step = CUSTOMER_LADDER[c.step] || CUSTOMER_LADDER[CUSTOMER_LADDER.length - 1];
+    const kind = step.kind === 'call' ? 'internal_pull' : step.kind === 'moc' ? 'reach_back' : 'draft_reply';
+    await enqueueAction({
+      project_id: c.project_id,
+      kind,
+      proposed_payload: { cadence: true, track: c.track, ladderStep: step.kind, cadenceId: c.id },
+    });
+    await advanceCadence(c);
+  }
+  return { fired: due.length };
 }

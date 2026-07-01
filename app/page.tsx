@@ -163,6 +163,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [dlrResult, setDlrResult] = useState('');
   const [lifeMsg, setLifeMsg] = useState('');
   const [contactsText, setContactsText] = useState('');
+  const [outbox, setOutbox] = useState<any[]>([]);
+  const [outboxMsg, setOutboxMsg] = useState('');
   const [history, setHistory] = useState<{ dealership: any; projects: any[] } | null>(null);
   const [importMsg, setImportMsg] = useState('');
   const [importing, setImporting] = useState(false);
@@ -305,6 +307,28 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     } else {
       setDlrResult(`✗ ${r.error || 'Failed.'}`);
     }
+  }
+
+  async function loadOutbox() {
+    setOutboxMsg('Loading…');
+    try {
+      const r = await fetch('/api/outbox?state=pending').then((x) => x.json());
+      setOutbox(r.ok ? r.actions || [] : []);
+      setOutboxMsg(r.ok ? `${(r.actions || []).length} pending` : `✗ ${r.error}`);
+    } catch (e: any) { setOutboxMsg(`✗ ${e.message}`); }
+  }
+
+  async function decideOutbox(id: number, decision: string) {
+    setOutboxMsg('Working…');
+    try {
+      const r = await fetch('/api/outbox', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, decision }),
+      }).then((x) => x.json());
+      if (r.dispatchError) setOutboxMsg(`⚠ ${decision} but dispatch failed: ${r.dispatchError}`);
+      else setOutboxMsg(`✓ ${decision}`);
+      loadOutbox();
+    } catch (e: any) { setOutboxMsg(`✗ ${e.message}`); }
   }
 
   async function runOnboarding(action: string, extra: any = {}) {
@@ -473,6 +497,35 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           <p style={S.sub}>Phase 0.5 — group → dealership → project</p>
         </div>
         <button style={S.btnGhost} onClick={logout}>Sign out</button>
+      </div>
+
+      {/* ── OUTBOX (action queue) ──────────────────────────── */}
+      <div style={S.card}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={S.h2}>OUTBOX — pending actions</h2>
+          <button style={S.btnGhost} onClick={loadOutbox}>Refresh</button>
+        </div>
+        {outboxMsg && <p style={{ fontSize: 12, color: outboxMsg.startsWith('✗') ? '#e5564b' : '#9db2d3' }}>{outboxMsg}</p>}
+        {outbox.length === 0 ? (
+          <p style={{ fontSize: 13, color: '#7e8ca8' }}>Nothing pending. Swept emails and lifecycle steps propose actions here for approve / reject.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+            {outbox.map((a) => (
+              <div key={a.id} style={{ padding: 10, border: '1px solid #1f2c45', borderRadius: 8, background: '#0e1626' }}>
+                <div style={{ ...S.mono, fontSize: 12, color: '#9db2d3' }}>
+                  #{a.id} · <b>{a.kind}</b>{a.project_id ? ` · ${a.project_id}` : ''}
+                </div>
+                <pre style={{ ...S.mono, fontSize: 12, whiteSpace: 'pre-wrap', margin: '6px 0', color: '#c7d4ea' }}>
+                  {JSON.stringify(a.proposed_payload, null, 2).slice(0, 600)}
+                </pre>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button style={S.btn} onClick={() => decideOutbox(a.id, 'approved')}>Approve</button>
+                  <button style={S.btnGhost} onClick={() => decideOutbox(a.id, 'rejected')}>Reject</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* ── Bulk import ────────────────────────────────────── */}
