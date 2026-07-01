@@ -165,6 +165,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [contactsText, setContactsText] = useState('');
   const [outbox, setOutbox] = useState<any[]>([]);
   const [outboxMsg, setOutboxMsg] = useState('');
+  const [proposeConv, setProposeConv] = useState('');
   const [rosterProj, setRosterProj] = useState('');
   const [rosterDms, setRosterDms] = useState('');
   const [rosterText, setRosterText] = useState('');
@@ -373,6 +374,21 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     } catch (e: any) { setRosterMsg(`✗ ${e.message}`); }
   }
 
+  async function proposeThread() {
+    if (!proposeConv.trim()) { setOutboxMsg('✗ paste a conversationId'); return; }
+    setOutboxMsg('Classifying thread…');
+    try {
+      const r = await fetch('/api/onboarding', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'propose_thread', conversationId: proposeConv.trim() }),
+      }).then((x) => x.json());
+      if (!r.ok) { setOutboxMsg(`✗ ${r.error}`); return; }
+      setOutboxMsg(`✓ proposed ${r.dealer_name || ''} (action #${r.actionId}) — approve below`);
+      setProposeConv('');
+      loadOutbox();
+    } catch (e: any) { setOutboxMsg(`✗ ${e.message}`); }
+  }
+
   async function loadOutbox() {
     setOutboxMsg('Loading…');
     try {
@@ -570,6 +586,12 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h2 style={S.h2}>OUTBOX — pending actions</h2>
           <button style={S.btnGhost} onClick={loadOutbox}>Refresh</button>
+        </div>
+        <div style={{ ...S.row, marginTop: 8 }}>
+          <div style={{ flex: '1 1 320px' }}>
+            <input style={{ ...S.input, ...S.mono, fontSize: 11 }} value={proposeConv} onChange={(e) => setProposeConv(e.target.value)} placeholder="paste a conversationId to onboard a specific thread" />
+          </div>
+          <button style={S.btnGhost} onClick={proposeThread}>Propose onboarding from thread</button>
         </div>
         {outboxMsg && <p style={{ fontSize: 12, color: outboxMsg.startsWith('✗') ? '#e5564b' : '#9db2d3' }}>{outboxMsg}</p>}
         {outbox.length === 0 ? (

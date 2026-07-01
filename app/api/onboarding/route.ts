@@ -5,6 +5,8 @@ import { getProjectsByDealership, createProject, setProjectRefs, type Project } 
 import { createOnboardingTask, completeOnboardingTask } from '@/lib/onboardingTask';
 import { setPortalDealerStatus } from '@/lib/portal';
 import { getGroup } from '@/lib/groups';
+import { fetchThread } from '@/lib/graph';
+import { classifyEmail } from '@/lib/classify';
 import { addContacts, listContacts } from '@/lib/contacts';
 import { buildStage2Email, buildStage3Email, buildDealerEmail } from '@/lib/email';
 import { enqueueAction } from '@/lib/actions';
@@ -23,10 +25,28 @@ export async function POST(req: NextRequest) {
   if (!(await isAuthed())) return unauthorized();
   try {
     const b = (await req.json()) as {
-      action: string; dealershipId: string;
+      action: string; dealershipId?: string; conversationId?: string;
       people?: { name?: string; email: string; kind?: 'moc' | 'dealer' }[];
     };
-    const d = await getDealership(b.dealershipId);
+
+    // propose_thread: classify a specific email thread and, if it's onboarding,
+    // drop an open_onboarding proposal into the OUTBOX (approve there to create it).
+    if (b.action === 'propose_thread') {
+      if (!b.conversationId) return NextResponse.json({ ok: false, error: 'conversationId required' }, { status: 400 });
+      const thread = await fetchThread(b.conversationId);
+      if (!thread.length) return NextResponse.json({ ok: false, error: 'thread has no messages' }, { status: 404 });
+      const decision = await classifyEmail(thread);
+      if (decision.email_type !== 'dms_onboarding') {
+        return NextResponse.json({ ok: false, error: `classified as ${decision.email_type}, not onboarding` }, { status: 422 });
+      }
+      const action = await enqueueAction({
+        conversation_id: b.conversationId, kind: 'create_task',
+        proposed_payload: { intent: 'open_onboarding', decision, conversation_id: b.conversationId, dealer_name: decision.dealer_name, dms: decision.dms },
+      });
+      return NextResponse.json({ ok: true, actionId: action.id, dealer_name: decision.dealer_name });
+    }
+
+    const d = await getDealership(b.dealershipId || '');
     if (!d) return NextResponse.json({ ok: false, error: 'dealership not found' }, { status: 404 });
 
     if (b.action === 'contacts') {
