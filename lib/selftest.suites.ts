@@ -8,6 +8,7 @@ import { detectRegion } from './regions';
 import { detectBrand, titleCase } from './brands';
 import { buildDescription } from './descriptions';
 import { classifyKind, parseContactLines } from './contacts';
+import { nextDue, addBusinessDays, addCalendarDaysRolled } from './cadence';
 
 register('harness', () => [eq('1+1', 2, 1 + 1)]);
 
@@ -128,5 +129,16 @@ register('contacts', () => {
     eq('parse name', 'Jane Rep', parsed[0].name),
     eq('parse email', 'jane@mocproducts.com', parsed[0].email),
     eq('parse bare email', 'bob@dealer.com', parsed[1].email),
+  ];
+});
+
+register('cadence', () => {
+  const fri = new Date('2026-01-02T12:00:00.000Z'); // a Friday
+  const mon = new Date('2026-01-05T12:00:00.000Z'); // a Monday
+  return [
+    eq('fri +2bd → Tue', '2026-01-06T12:00:00.000Z', nextDue(fri, 1).toISOString()),
+    eq('mon +2bd → Wed', '2026-01-07T12:00:00.000Z', nextDue(mon, 1).toISOString()),
+    eq('addBusinessDays skips weekend', '2026-01-06T12:00:00.000Z', addBusinessDays(fri, 2).toISOString()),
+    eq('mon +5cal rolled off weekend → Mon', '2026-01-12T12:00:00.000Z', addCalendarDaysRolled(mon, 5).toISOString()),
   ];
 });
