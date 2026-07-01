@@ -143,6 +143,26 @@ register('cadence', () => {
   ];
 });
 
+import { parseDealerVault, parseTekion, parseReynoldsFields } from './feeds';
+
+register('feeds', () => {
+  const dv = parseDealerVault('Citrus Motors Ford KIA\tDVD39749\tDealerTrack\tService\tActive\t05/13/2026 2:09 AM\t05/13/2026 01:03 PM\t218\t05/12/2026\tDVV02003');
+  const tk = parseTekion(['Young Honda','youngautomotivegrouput_6837_0','EZ Wins','May 13 2026, 3:55 pm','1.0.0','Pending Onboarding','May 13 2026, 3:55 pm','May 13 2026, 3:55 pm'].join('\n'));
+  const rey = parseReynoldsFields({ name:'Scarborough Toyota', ppsysid:'713042', store:'17', branch:'01' });
+  return [
+    // titleCase leaves 'Citrus Motors Ford KIA' unchanged (mixed-case string → not all-caps)
+    eq('dv name', 'Citrus Motors Ford KIA', dv[0].name),
+    eq('dv id', 'DVD39749', dv[0].platform_fields.dealervault_id),
+    eq('dv underlying dms', 'DealerTrack', dv[0].platform_fields.underlying_dms),
+    eq('dv conduit', 'dealervault', dv[0].conduit),
+    eq('tk name', 'Young Honda', tk[0].name),
+    eq('tk id', 'youngautomotivegrouput_6837_0', tk[0].platform_fields.tekion_dealer_id),
+    eq('tk conduit', 'tekion', tk[0].conduit),
+    eq('rey store code', '1701', rey.platform_fields.store_code),
+    eq('rey conduit', 'reynolds_rci', rey.conduit),
+  ];
+});
+
 import { applyCompleteness } from './roster';
 
 register('roster', () => {
