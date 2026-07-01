@@ -252,13 +252,16 @@ export async function fetchRecentInbox(lookbackHours: number): Promise<Msg[]> {
   const filter =
     `receivedDateTime ge ${since}` +
     ` and not(categories/any(c: c eq '${PROCESSED_CATEGORY}'))`;
+  // Span the WHOLE mailbox, not just the Inbox folder — Outlook rules file MOC/
+  // onboarding intros into subfolders, so an inbox-only fetch misses them. Blake's
+  // own sent/draft mail is dropped by the prefilter (from == internal domain).
   const url =
-    `${GRAPH_BASE}/users/${encodeURIComponent(userEmail())}/mailFolders/inbox/messages` +
+    `${GRAPH_BASE}/users/${encodeURIComponent(userEmail())}/messages` +
     `?$filter=${encodeURIComponent(filter)}` +
     `&$select=id,conversationId,subject,from,toRecipients,receivedDateTime,bodyPreview,hasAttachments,categories` +
     `&$orderby=receivedDateTime desc&$top=50`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error(`Inbox fetch failed: ${await res.text()}`);
+  if (!res.ok) throw new Error(`Mailbox fetch failed: ${await res.text()}`);
   const data = (await res.json()) as { value?: RawGraphMsg[] };
   return (data.value || []).map(mapMsg);
 }
