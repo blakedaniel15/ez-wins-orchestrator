@@ -47,7 +47,8 @@ async function proposeActions(msg: Msg, decision: Decision): Promise<number> {
 
   switch (decision.email_type) {
     case 'dms_onboarding':
-      actions.push({ kind: 'create_task', payload: { ...base, intent: 'open_onboarding', moc_rep: decision.moc_rep, list: '901113435718' } });
+      // Carry the full decision so approving in the OUTBOX can execute Stage 1.
+      actions.push({ kind: 'create_task', payload: { ...base, intent: 'open_onboarding', moc_rep: decision.moc_rep, decision, list: '901113435718' } });
       break;
     case 'integration_approval':
       actions.push({ kind: 'create_task', payload: { ...base, intent: 'stage2_promote' } });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isAuthed, unauthorized } from '@/lib/security';
 import { listActions, getAction, decideAction } from '@/lib/actions';
 import { sendMail, createOutboundDraft, createDraftReply } from '@/lib/graph';
+import { openOnboardingFromDecision } from '@/lib/onboardingFlow';
 
 export const runtime = 'nodejs';
 
@@ -34,8 +35,13 @@ export async function POST(req: NextRequest) {
 
     let dispatchError: string | null = null;
     let finalState: 'approved' | 'sent' = 'approved';
+    let result: unknown = null;
     try {
-      if (action.kind === 'draft_reply' && p.messageId) {
+      if (action.kind === 'create_task' && p.intent === 'open_onboarding' && p.decision) {
+        // Execute Stage 1: create the dealership + portal + Feed Approval Pending task + contacts.
+        result = await openOnboardingFromDecision(p.decision as Parameters<typeof openOnboardingFromDecision>[0], (p.conversation_id as string) || null);
+        finalState = 'approved';
+      } else if (action.kind === 'draft_reply' && p.messageId) {
         await createDraftReply(String(p.messageId), String(p.body || ''));
         finalState = 'approved';
       } else if (action.kind === 'reach_back' || action.kind === 'send_welcome' || action.kind === 'login_prompt') {
@@ -52,7 +58,7 @@ export async function POST(req: NextRequest) {
     }
 
     const updated = await decideAction(b.id, finalState, b.payload);
-    return NextResponse.json({ ok: !dispatchError, action: updated, dispatchError });
+    return NextResponse.json({ ok: !dispatchError, action: updated, dispatchError, result });
   } catch (e) {
     return NextResponse.json({ ok: false, error: (e as Error).message }, { status: 500 });
   }

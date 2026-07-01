@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthed, unauthorized } from '@/lib/security';
-import { getToken, searchMessagesBySubject, fetchThread } from '@/lib/graph';
+import { getToken, searchMessagesBySubject, searchMessagesFrom, fetchThread } from '@/lib/graph';
 import { classifyEmail } from '@/lib/classify';
 
 export const runtime = 'nodejs';
@@ -18,12 +18,16 @@ export async function GET(req: NextRequest) {
     let matches: { subject: string; from: string; conversationId: string }[] = [];
 
     if (!conversationId) {
+      const from = sp.get('from');
       const subject = sp.get('subject');
-      if (!subject) return NextResponse.json({ ok: false, error: 'pass ?subject= or ?conversationId=' }, { status: 400 });
+      if (!from && !subject) return NextResponse.json({ ok: false, error: 'pass ?from=, ?subject=, or ?conversationId=' }, { status: 400 });
       const token = await getToken();
-      const found = await searchMessagesBySubject(token, subject);
+      // Sender search first (onboarding intros are ~always from mocproducts.com);
+      // fall back to subject search if no from-match or from wasn't given.
+      let found = from ? await searchMessagesFrom(token, from) : [];
+      if (!found.length && subject) found = await searchMessagesBySubject(token, subject);
       matches = found.map((m) => ({ subject: m.subject || '', from: m.from?.emailAddress?.address || '', conversationId: m.conversationId }));
-      if (!found.length) return NextResponse.json({ ok: false, error: `no message matched subject "${subject}"` }, { status: 404 });
+      if (!found.length) return NextResponse.json({ ok: false, error: `no message matched from="${from || ''}" subject="${subject || ''}"` }, { status: 404 });
       conversationId = found[0].conversationId;
     }
 
@@ -34,7 +38,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       conversationId,
-      matchedFrom: sp.get('subject') ? matches.slice(0, 5) : undefined,
+      matchedFrom: matches.length ? matches.slice(0, 5) : undefined,
       thread: thread.map((m) => ({ from: m.from, subject: m.subject, date: m.receivedDateTime })),
       decision,
     });

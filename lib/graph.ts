@@ -181,6 +181,24 @@ export async function searchMessagesBySubject(token: string, q: string): Promise
   );
 }
 
+// Search recent messages by sender address (or partial domain), e.g. "mocproducts.com".
+export async function searchMessagesFrom(token: string, from: string): Promise<GraphMessage[]> {
+  const search = `"from:${from.replace(/"/g, '')}"`;
+  const url =
+    `${GRAPH_BASE}/users/${encodeURIComponent(userEmail())}/messages` +
+    `?$search=${encodeURIComponent(search)}` +
+    `&$select=id,subject,conversationId,from,receivedDateTime,categories` +
+    `&$top=25`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, ConsistencyLevel: 'eventual' },
+  });
+  if (!res.ok) throw new Error(`From search failed: ${await res.text()}`);
+  const data = (await res.json()) as { value?: GraphMessage[] };
+  return (data.value || []).sort(
+    (a, b) => new Date(b.receivedDateTime).getTime() - new Date(a.receivedDateTime).getTime()
+  );
+}
+
 async function patchCategories(token: string, messageId: string, categories: string[]): Promise<void> {
   const url = `${GRAPH_BASE}/users/${encodeURIComponent(userEmail())}/messages/${messageId}`;
   const res = await fetch(url, {
