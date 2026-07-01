@@ -35,18 +35,40 @@ function client(): Anthropic {
   return new Anthropic({ apiKey });
 }
 
+// Strip HTML, inline images (base64 data URIs), and boilerplate down to readable
+// text, then cap length. Email bodies can be enormous (quoted history + inline
+// images) — one real thread hit 1.44M tokens and blew the model's context.
+function sanitizeBody(body: string): string {
+  return (body || '')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/data:[^)"'\s]+/gi, '[image]')     // base64 inline images
+    .replace(/<[^>]+>/g, ' ')                    // tags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&[a-z]+;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 4000);                             // per-message cap
+}
+
+const MAX_THREAD_CHARS = 120_000; // ~30k tokens — safely under the model limit
+
 function serializeThread(thread: Msg[]): string {
-  return thread
+  // Only the most recent messages matter for classification; oldest quoted
+  // history is redundant. Take the last 6, newest last.
+  const recent = thread.slice(-6);
+  const out = recent
     .map((m, i) => [
       `--- Message ${i + 1} ---`,
       `From: ${m.from}`,
-      `To: ${m.toRecipients.join(', ')}`,
+      `To: ${(m.toRecipients || []).join(', ')}`,
       `Date: ${m.receivedDateTime}`,
       `Subject: ${m.subject}`,
       '',
-      m.body || m.bodyPreview,
+      sanitizeBody(m.body || m.bodyPreview),
     ].join('\n'))
     .join('\n\n');
+  return out.length > MAX_THREAD_CHARS ? out.slice(0, MAX_THREAD_CHARS) : out;
 }
 
 // Strip ```json fences and parse. If the whole string isn't valid JSON (e.g. stray

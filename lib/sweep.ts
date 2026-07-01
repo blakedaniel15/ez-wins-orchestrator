@@ -73,13 +73,14 @@ async function proposeActions(msg: Msg, decision: Decision): Promise<number> {
   return actions.length;
 }
 
-export async function runSweep(lookbackHours = 1.5): Promise<{ fetched: number; processed: number; proposed: number; skipped: number; errors: number; byType: Record<string, number> }> {
+export async function runSweep(lookbackHours = 1.5): Promise<{ fetched: number; processed: number; proposed: number; skipped: number; errors: number; byType: Record<string, number>; details: { subject: string; from: string; outcome: string }[] }> {
   const inbox = await fetchRecentInbox(lookbackHours);
   let processed = 0;
   let proposed = 0;
   let skipped = 0;
   let errors = 0;
   const byType: Record<string, number> = {};
+  const details: { subject: string; from: string; outcome: string }[] = [];
 
   for (const msg of inbox) {
     let thread: Msg[];
@@ -91,6 +92,7 @@ export async function runSweep(lookbackHours = 1.5): Promise<{ fetched: number; 
     const skip = prefilter(thread);
     if (skip) {
       skipped++;
+      details.push({ subject: msg.subject, from: msg.from, outcome: `skipped:${skip}` });
       await tagProcessed(msg.id, [PROCESSED, 'EZ-Skip']).catch(() => {});
       continue;
     }
@@ -100,16 +102,19 @@ export async function runSweep(lookbackHours = 1.5): Promise<{ fetched: number; 
     } catch (e) {
       // classification failed — leave untagged so a later run retries.
       errors++;
+      details.push({ subject: msg.subject, from: msg.from, outcome: 'error' });
       await logDecision({ kind: 'sweep_error', decision: 'classify_failed', detail: { conversationId: msg.conversationId, subject: msg.subject, error: (e as Error).message } });
       continue;
     }
     byType[decision.email_type] = (byType[decision.email_type] || 0) + 1;
-    proposed += await proposeActions(msg, decision);
+    const n = await proposeActions(msg, decision);
+    proposed += n;
+    details.push({ subject: msg.subject, from: msg.from, outcome: `${decision.email_type}${n ? `→proposed` : ''}` });
     await tagProcessed(msg.id, [PROCESSED, OUTCOME_TAG[decision.email_type] || 'EZ-Noise']).catch(() => {});
     processed++;
   }
 
   // No silent caps: report what was fetched vs acted on.
   await logDecision({ kind: 'sweep', decision: 'complete', detail: { fetched: inbox.length, processed, proposed, skipped, errors, byType } });
-  return { fetched: inbox.length, processed, proposed, skipped, errors, byType };
+  return { fetched: inbox.length, processed, proposed, skipped, errors, byType, details };
 }
