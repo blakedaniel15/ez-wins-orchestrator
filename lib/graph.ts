@@ -6,24 +6,21 @@
 
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0';
 
 // ---------------------------------------------------------------------------
-// Signature — load once at module init; extract inner <body> so we never nest
-// <html>/<head> tags inside the email body (same pattern as the email assistant).
+// Signature — load once, best-effort. Read from the project root (bundled via
+// next.config outputFileTracingIncludes). Missing signature → drafts without it.
+// Avoid import.meta.url (unreliable inside Next's server bundle) — use cwd.
 // ---------------------------------------------------------------------------
 let SIGNATURE_HTML = '';
 try {
-  const sigRaw = fs.readFileSync(path.join(__dirname, 'signature.html'), 'utf-8');
+  const sigRaw = fs.readFileSync(path.join(process.cwd(), 'lib/signature.html'), 'utf-8');
   const bodyMatch = sigRaw.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
   SIGNATURE_HTML = bodyMatch ? bodyMatch[1].trim() : sigRaw;
 } catch {
-  // signature.html not present in this environment; drafts will be sent without it.
+  // signature.html not present / not traced in this environment.
   SIGNATURE_HTML = '';
 }
 
