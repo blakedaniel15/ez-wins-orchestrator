@@ -165,6 +165,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [contactsText, setContactsText] = useState('');
   const [outbox, setOutbox] = useState<any[]>([]);
   const [outboxMsg, setOutboxMsg] = useState('');
+  const [rosterProj, setRosterProj] = useState('');
+  const [rosterDms, setRosterDms] = useState('');
+  const [rosterText, setRosterText] = useState('');
+  const [rosterRows, setRosterRows] = useState<any[]>([]);
+  const [rosterMsg, setRosterMsg] = useState('');
   const [history, setHistory] = useState<{ dealership: any; projects: any[] } | null>(null);
   const [importMsg, setImportMsg] = useState('');
   const [importing, setImporting] = useState(false);
@@ -307,6 +312,34 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     } else {
       setDlrResult(`✗ ${r.error || 'Failed.'}`);
     }
+  }
+
+  async function extractRosterText() {
+    if (!rosterProj) { setRosterMsg('✗ Enter a project id (ONB-…).'); return; }
+    setRosterMsg('Extracting…');
+    try {
+      const r = await fetch('/api/roster', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId: rosterProj, underlyingDms: rosterDms, source: 'email_text', text: rosterText }),
+      }).then((x) => x.json());
+      if (!r.ok) { setRosterMsg(`✗ ${r.error}`); return; }
+      setRosterRows(r.roster || []);
+      setRosterMsg(`✓ ${r.count} row(s)${r.reachBackQueued ? ' · reach-back queued in OUTBOX' : ''}`);
+    } catch (e: any) { setRosterMsg(`✗ ${e.message}`); }
+  }
+
+  async function extractRosterFile(file: File) {
+    if (!rosterProj) { setRosterMsg('✗ Enter a project id first.'); return; }
+    setRosterMsg('Uploading…');
+    try {
+      const fd = new FormData();
+      fd.append('projectId', rosterProj); fd.append('underlyingDms', rosterDms);
+      fd.append('source', 'form_upload'); fd.append('file', file);
+      const r = await fetch('/api/roster', { method: 'POST', body: fd }).then((x) => x.json());
+      if (!r.ok) { setRosterMsg(`✗ ${r.error}`); return; }
+      setRosterRows(r.roster || []);
+      setRosterMsg(`✓ ${r.count} row(s) from ${file.name}${r.reachBackQueued ? ' · reach-back queued' : ''}`);
+    } catch (e: any) { setRosterMsg(`✗ ${e.message}`); }
   }
 
   async function loadOutbox() {
@@ -523,6 +556,47 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
                   <button style={S.btn} onClick={() => decideOutbox(a.id, 'approved')}>Approve</button>
                   <button style={S.btnGhost} onClick={() => decideOutbox(a.id, 'rejected')}>Reject</button>
                 </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Email / roster intake ─────────────────────────── */}
+      <div style={S.card}>
+        <h2 style={S.h2}>Email / roster intake</h2>
+        <p style={{ fontSize: 12, color: '#7e8ca8', marginTop: -4 }}>
+          Paste an email body / user list, or upload a spreadsheet or screenshot. Extracts the users to add and links them to the project (role×DMS completeness applied; missing emails → reach-back in the OUTBOX).
+        </p>
+        <div style={S.row}>
+          <div style={{ flex: '1 1 200px' }}>
+            <label style={S.label}>Project ID</label>
+            <input style={{ ...S.input, ...S.mono }} value={rosterProj} onChange={(e) => setRosterProj(e.target.value)} placeholder="ONB-2026-0001" />
+          </div>
+          <div style={{ flex: '1 1 130px' }}>
+            <label style={S.label}>Underlying DMS</label>
+            <select style={S.input} value={rosterDms} onChange={(e) => setRosterDms(e.target.value)}>
+              {['', 'CDK', 'Fortellis', 'DealerTrack', 'Reynolds', 'Tekion', 'PBS', 'Dealerbuilt', 'AutoMate', 'Other'].map((o) => (
+                <option key={o} value={o}>{o || 'DMS —'}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ flex: '1 1 160px', display: 'flex', alignItems: 'flex-end' }}>
+            <label style={{ ...S.btnGhost, cursor: 'pointer', display: 'inline-block' }}>
+              Upload file
+              <input type="file" style={{ display: 'none' }} accept=".xlsx,.xls,.csv,image/*"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) extractRosterFile(f); }} />
+            </label>
+          </div>
+        </div>
+        <textarea style={{ ...S.input, minHeight: 70, fontFamily: 'inherit', marginTop: 8 }} value={rosterText} onChange={(e) => setRosterText(e.target.value)} placeholder={'Paste the user list / email body here…\nJane Manager jane@dealer.com Service Manager\nBob Advisor bob@dealer.com Service Advisor 4421'} />
+        <button style={S.btn} onClick={extractRosterText}>Extract from text</button>
+        {rosterMsg && <p style={{ fontSize: 13, color: rosterMsg.startsWith('✗') ? '#e5564b' : '#37c871', marginTop: 8 }}>{rosterMsg}</p>}
+        {rosterRows.length > 0 && (
+          <div style={{ marginTop: 8, ...S.mono, fontSize: 12 }}>
+            {rosterRows.map((r, i) => (
+              <div key={i} style={{ color: r.action === 'reach_back' ? '#e5c354' : '#c7d4ea' }}>
+                {r.name || '—'} · {r.email || '(no email)'} · {r.role || '—'}{r.action !== 'none' ? ` · ⚠ ${r.action}` : ''}
               </div>
             ))}
           </div>

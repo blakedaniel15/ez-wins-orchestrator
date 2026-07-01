@@ -42,7 +42,7 @@ const OUTCOME_TAG: Record<string, string> = {
 async function proposeActions(msg: Msg, decision: Decision): Promise<number> {
   const project = await getProjectByConversation(msg.conversationId);
   const projectId = project?.id || null;
-  const base = { conversation_id: msg.conversationId, subject: msg.subject, dealer_name: decision.dealer_name, dms: decision.dms };
+  const base = { conversation_id: msg.conversationId, subject: msg.subject, dealer_name: decision.dealer_name, dms: decision.dms, roster_present: decision.roster_present, from: msg.from };
   const actions: { kind: ActionKind; payload: Record<string, unknown> }[] = [];
 
   switch (decision.email_type) {
