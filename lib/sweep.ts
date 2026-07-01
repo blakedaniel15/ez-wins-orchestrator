@@ -72,11 +72,12 @@ async function proposeActions(msg: Msg, decision: Decision): Promise<number> {
   return actions.length;
 }
 
-export async function runSweep(lookbackHours = 1.5): Promise<{ fetched: number; processed: number; proposed: number; skipped: number; byType: Record<string, number> }> {
+export async function runSweep(lookbackHours = 1.5): Promise<{ fetched: number; processed: number; proposed: number; skipped: number; errors: number; byType: Record<string, number> }> {
   const inbox = await fetchRecentInbox(lookbackHours);
   let processed = 0;
   let proposed = 0;
   let skipped = 0;
+  let errors = 0;
   const byType: Record<string, number> = {};
 
   for (const msg of inbox) {
@@ -97,7 +98,8 @@ export async function runSweep(lookbackHours = 1.5): Promise<{ fetched: number; 
       decision = await classifyEmail(thread);
     } catch (e) {
       // classification failed — leave untagged so a later run retries.
-      await logDecision({ kind: 'sweep_error', decision: 'classify_failed', detail: { conversationId: msg.conversationId, error: (e as Error).message } });
+      errors++;
+      await logDecision({ kind: 'sweep_error', decision: 'classify_failed', detail: { conversationId: msg.conversationId, subject: msg.subject, error: (e as Error).message } });
       continue;
     }
     byType[decision.email_type] = (byType[decision.email_type] || 0) + 1;
@@ -107,6 +109,6 @@ export async function runSweep(lookbackHours = 1.5): Promise<{ fetched: number; 
   }
 
   // No silent caps: report what was fetched vs acted on.
-  await logDecision({ kind: 'sweep', decision: 'complete', detail: { fetched: inbox.length, processed, proposed, skipped, byType } });
-  return { fetched: inbox.length, processed, proposed, skipped, byType };
+  await logDecision({ kind: 'sweep', decision: 'complete', detail: { fetched: inbox.length, processed, proposed, skipped, errors, byType } });
+  return { fetched: inbox.length, processed, proposed, skipped, errors, byType };
 }
