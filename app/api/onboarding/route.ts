@@ -13,6 +13,7 @@ import { sql } from '@/lib/db';
 
 export const runtime = 'nodejs';
 const COMPANIES_INBOUND = '901105435045';
+const FEED_APPROVAL_PENDING = '901113435718';
 
 // POST { action, dealershipId, ... }
 //   action 'contacts'  { people: [{name,email,kind?}] }  → link request contacts
@@ -31,6 +32,24 @@ export async function POST(req: NextRequest) {
     if (b.action === 'contacts') {
       const added = await addContacts({ dealership_id: d.id, group_id: d.group_id, source: 'request', people: b.people || [] });
       return NextResponse.json({ ok: true, added });
+    }
+
+    if (b.action === 'stage1') {
+      // Intro received → open the engagement: mint the onboarding project (if none)
+      // and create the Feed Approval Pending task, stamped with the IDs.
+      const projects = await getProjectsByDealership(d.id);
+      let proj: Project | undefined = projects.find((p) => p.type === 'onboarding');
+      if (!proj) proj = await createProject({ type: 'onboarding', dealership_id: d.id });
+      let ownerGroupName: string | null = null;
+      if (d.group_id) {
+        const g = await getGroup(d.group_id);
+        ownerGroupName = g?.name || null;
+      }
+      const { taskId, warning } = await createOnboardingTask({ dealership: d, projectId: proj.id, listId: FEED_APPROVAL_PENDING, ownerGroupName });
+      await setProjectRefs(proj.id, { clickup_task_id: taskId });
+      await setDealershipOnboarding(d.id, { lifecycle_stage: 'pending', platform_fields: { ...(d.platform_fields || {}), pending_task_id: taskId } });
+      await logDecision({ kind: 'lifecycle', type: 'onboarding', dealership_id: d.id, decision: 'stage1', detail: { taskId, warning } });
+      return NextResponse.json({ ok: true, taskId, projectId: proj.id, warning });
     }
 
     if (b.action === 'stage2') {

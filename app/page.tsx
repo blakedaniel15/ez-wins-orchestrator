@@ -404,7 +404,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         body: JSON.stringify({ action, dealershipId: projDealershipId, ...extra }),
       }).then((x) => x.json());
       if (!r.ok) { setLifeMsg(`✗ ${r.error || 'Failed.'}`); return; }
-      if (action === 'stage2') setLifeMsg(`✓ Stage 2 — inbound task ${r.taskId} (project ${r.projectId})${r.warning ? ` ⚠ ${r.warning}` : ''}`);
+      if (action === 'stage1') setLifeMsg(`✓ Stage 1 — Feed Approval Pending task ${r.taskId} (project ${r.projectId})${r.warning ? ` ⚠ ${r.warning}` : ''}`);
+      else if (action === 'stage2') setLifeMsg(`✓ Stage 2 — inbound task ${r.taskId} (project ${r.projectId})${r.warning ? ` ⚠ ${r.warning}` : ''}`);
       else if (action === 'stage3') setLifeMsg(`✓ Stage 3 — live${r.portalError ? ` ⚠ portal: ${r.portalError}` : ''}${r.emailQueued ? ' · go-live email queued in OUTBOX' : ''}`);
       else if (action === 'notify_dealer') setLifeMsg(`✓ notify dealer — ${r.count || 0} roster email(s)${r.emailQueued ? ' queued in OUTBOX' : ' (none to send)'}`);
       else if (action === 'contacts') setLifeMsg(`✓ linked ${r.added?.length || 0} contact(s)`);
@@ -945,6 +946,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           Acts on the dealership in the <b>Dealership ID</b> box below (card 1). Manual drivers until the email sweep auto-fires them.
         </p>
         <div style={S.row}>
+          <button style={S.btn} onClick={() => runOnboarding('stage1')}>Stage 1: intro received → create Feed Approval Pending task</button>
           <button style={S.btn} onClick={() => runOnboarding('stage2')}>Stage 2: integration approved → create inbound task</button>
           <button style={S.btn} onClick={() => runOnboarding('stage3')}>Stage 3: complete → go live</button>
           <button style={S.btnGhost} onClick={() => runOnboarding('notify_dealer')}>Parts &amp; users onboarded → notify dealer</button>
