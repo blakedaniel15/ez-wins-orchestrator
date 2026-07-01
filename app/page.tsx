@@ -170,6 +170,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [rosterText, setRosterText] = useState('');
   const [rosterRows, setRosterRows] = useState<any[]>([]);
   const [rosterMsg, setRosterMsg] = useState('');
+  const [feedSource, setFeedSource] = useState('dealervault');
+  const [feedText, setFeedText] = useState('');
+  const [feedRecords, setFeedRecords] = useState<any[]>([]);
+  const [feedMsg, setFeedMsg] = useState('');
   const [history, setHistory] = useState<{ dealership: any; projects: any[] } | null>(null);
   const [importMsg, setImportMsg] = useState('');
   const [importing, setImporting] = useState(false);
@@ -312,6 +316,33 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     } else {
       setDlrResult(`✗ ${r.error || 'Failed.'}`);
     }
+  }
+
+  async function parseFeed() {
+    setFeedMsg('Parsing…');
+    try {
+      const r = await fetch('/api/feeds', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'parse', source: feedSource, text: feedText }),
+      }).then((x) => x.json());
+      if (!r.ok) { setFeedMsg(`✗ ${r.error}`); return; }
+      setFeedRecords(r.records || []);
+      setFeedMsg(`✓ ${r.count} record(s) parsed`);
+    } catch (e: any) { setFeedMsg(`✗ ${e.message}`); }
+  }
+
+  async function confirmFeedRecord(record: any, idx: number) {
+    setFeedMsg(`Creating ${record.name}…`);
+    try {
+      const r = await fetch('/api/feeds', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm', record, groupId: record.groupSuggestion?.id || null }),
+      }).then((x) => x.json());
+      if (!r.ok) { setFeedMsg(`✗ ${r.error}`); return; }
+      setFeedMsg(`✓ ${r.dealership.id} — ${record.name}${r.portalError ? ` ⚠ portal: ${r.portalError}` : ''}`);
+      setFeedRecords((rows) => rows.filter((_, i) => i !== idx));
+      loadEntities();
+    } catch (e: any) { setFeedMsg(`✗ ${e.message}`); }
   }
 
   async function extractRosterText() {
@@ -597,6 +628,41 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
             {rosterRows.map((r, i) => (
               <div key={i} style={{ color: r.action === 'reach_back' ? '#e5c354' : '#c7d4ea' }}>
                 {r.name || '—'} · {r.email || '(no email)'} · {r.role || '—'}{r.action !== 'none' ? ` · ⚠ ${r.action}` : ''}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── DMS feed intake ───────────────────────────────── */}
+      <div style={S.card}>
+        <h2 style={S.h2}>DMS feed intake</h2>
+        <p style={{ fontSize: 12, color: '#7e8ca8', marginTop: -4 }}>
+          Paste a DealerVault or Tekion feed (or a Fortellis CSV) → parse → review (brand/region/group auto-detected) → confirm each to create the dealership + portal pipeline entry. Address-less feeds (DealerVault/Tekion) flag “no_address” — fill it before confirm for region.
+        </p>
+        <div style={S.row}>
+          <div style={{ flex: '1 1 160px' }}>
+            <label style={S.label}>Source</label>
+            <select style={S.input} value={feedSource} onChange={(e) => setFeedSource(e.target.value)}>
+              <option value="dealervault">DealerVault (paste)</option>
+              <option value="tekion">Tekion (paste)</option>
+              <option value="fortellis">Fortellis (CSV)</option>
+            </select>
+          </div>
+          <button style={S.btn} onClick={parseFeed}>Parse</button>
+        </div>
+        <textarea style={{ ...S.input, minHeight: 70, fontFamily: 'monospace', fontSize: 12, marginTop: 8 }} value={feedText} onChange={(e) => setFeedText(e.target.value)} placeholder={'Paste the feed here…'} />
+        {feedMsg && <p style={{ fontSize: 13, color: feedMsg.startsWith('✗') ? '#e5564b' : '#37c871', marginTop: 8 }}>{feedMsg}</p>}
+        {feedRecords.length > 0 && (
+          <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {feedRecords.map((r, i) => (
+              <div key={i} style={{ padding: 8, border: '1px solid #1f2c45', borderRadius: 6, fontSize: 12 }}>
+                <div style={S.mono}><b>{r.name}</b> · {r.dms} · {r.brand || 'no brand'} · {r.region || 'region?'}</div>
+                <div style={{ color: '#7e8ca8' }}>
+                  {r.groupSuggestion ? `group: ${r.groupSuggestion.name} (${Math.round(r.groupSuggestion.score * 100)}%)` : 'no group match'}
+                  {r.flags?.length ? ` · ⚠ ${r.flags.join(', ')}` : ''}
+                </div>
+                <button style={{ ...S.btn, marginTop: 6 }} onClick={() => confirmFeedRecord(r, i)}>Confirm → create dealership</button>
               </div>
             ))}
           </div>
