@@ -5,8 +5,11 @@ import { getProjectsByDealership, createProject, setProjectRefs, type Project } 
 import { createOnboardingTask, completeOnboardingTask } from '@/lib/onboardingTask';
 import { setPortalDealerStatus } from '@/lib/portal';
 import { getGroup } from '@/lib/groups';
-import { addContacts } from '@/lib/contacts';
+import { addContacts, listContacts } from '@/lib/contacts';
+import { buildStage2Email, buildStage3Email, buildDealerEmail } from '@/lib/email';
+import { enqueueAction } from '@/lib/actions';
 import { logDecision } from '@/lib/decisions';
+import { sql } from '@/lib/db';
 
 export const runtime = 'nodejs';
 const COMPANIES_INBOUND = '901105435045';
@@ -46,8 +49,15 @@ export async function POST(req: NextRequest) {
       const { taskId, warning } = await createOnboardingTask({ dealership: d, projectId: proj.id, listId: COMPANIES_INBOUND, ownerGroupName });
       await setProjectRefs(proj.id, { clickup_task_id: taskId });
       await setDealershipOnboarding(d.id, { lifecycle_stage: 'inbound' });
-      await logDecision({ kind: 'lifecycle', type: 'onboarding', dealership_id: d.id, decision: 'stage2', detail: { taskId, warning } });
-      return NextResponse.json({ ok: true, taskId, projectId: proj.id, warning });
+      // Propose the "send us the data" email to the MOC contacts (drafts-first via OUTBOX).
+      const mocContacts = await listContacts(d.id, 'moc');
+      let emailQueued = false;
+      if (mocContacts.length) {
+        await enqueueAction({ project_id: proj.id, kind: 'reach_back', proposed_payload: { ...buildStage2Email(d, mocContacts), stage: 'stage2', dealershipId: d.id } });
+        emailQueued = true;
+      }
+      await logDecision({ kind: 'lifecycle', type: 'onboarding', dealership_id: d.id, decision: 'stage2', detail: { taskId, warning, emailQueued } });
+      return NextResponse.json({ ok: true, taskId, projectId: proj.id, warning, emailQueued });
     }
 
     if (b.action === 'stage3') {
@@ -60,8 +70,34 @@ export async function POST(req: NextRequest) {
           portalError = (e as Error).message;
         }
       }
-      await logDecision({ kind: 'lifecycle', type: 'onboarding', dealership_id: d.id, decision: 'stage3', detail: { portalError } });
-      return NextResponse.json({ ok: true, portalError });
+      // Propose the go-live email to the original request participants.
+      const contacts = await listContacts(d.id);
+      const projects = await getProjectsByDealership(d.id);
+      const proj = projects.find((p) => p.type === 'onboarding');
+      let emailQueued = false;
+      if (contacts.length) {
+        await enqueueAction({ project_id: proj?.id || null, kind: 'send_welcome', proposed_payload: { ...buildStage3Email(d, contacts), stage: 'stage3', dealershipId: d.id } });
+        emailQueued = true;
+      }
+      await logDecision({ kind: 'lifecycle', type: 'onboarding', dealership_id: d.id, decision: 'stage3', detail: { portalError, emailQueued } });
+      return NextResponse.json({ ok: true, portalError, emailQueued });
+    }
+
+    if (b.action === 'notify_dealer') {
+      await setDealershipOnboarding(d.id, { parts_users_onboarded: true });
+      const projects = await getProjectsByDealership(d.id);
+      const proj = projects.find((p) => p.type === 'onboarding');
+      const rows = proj
+        ? ((await sql`select distinct email from roster_member where project_id = ${proj.id} and email is not null and email <> ''`) as { email: string }[])
+        : [];
+      const rosterEmails = rows.map((r) => r.email);
+      let emailQueued = false;
+      if (rosterEmails.length) {
+        await enqueueAction({ project_id: proj?.id || null, kind: 'send_welcome', proposed_payload: { ...buildDealerEmail(d, rosterEmails), stage: 'dealer_notify', dealershipId: d.id } });
+        emailQueued = true;
+      }
+      await logDecision({ kind: 'lifecycle', type: 'onboarding', dealership_id: d.id, decision: 'notify_dealer', detail: { count: rosterEmails.length, emailQueued } });
+      return NextResponse.json({ ok: true, count: rosterEmails.length, emailQueued });
     }
 
     return NextResponse.json({ ok: false, error: 'unknown action' }, { status: 400 });

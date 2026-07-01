@@ -142,3 +142,27 @@ register('cadence', () => {
     eq('mon +5cal rolled off weekend → Mon', '2026-01-12T12:00:00.000Z', addCalendarDaysRolled(mon, 5).toISOString()),
   ];
 });
+
+import { applyCompleteness } from './roster';
+
+register('roster', () => {
+  const mk = (o: Partial<import('./roster').RosterRow>) => ({
+    name: 'x',
+    email: '',
+    role: 'manager',
+    dms_id: '',
+    source: 'email_text',
+    confidence: 1,
+    missing: [],
+    action: 'none',
+    ...o,
+  });
+  return [
+    eq('mgr no email→reach_back', 'reach_back', applyCompleteness(mk({ role: 'manager', email: '' }), 'CDK').action),
+    eq('advisor CDK no dms_id→internal_pull', 'internal_id_pull', applyCompleteness(mk({ role: 'advisor', email: 'a@x.com', dms_id: '' }), 'CDK').action),
+    eq('advisor Tekion no dms_id→none', 'none', applyCompleteness(mk({ role: 'advisor', email: 'a@x.com', dms_id: '' }), 'Tekion').action),
+    eq('tech needs no email', false, applyCompleteness(mk({ role: 'technician', email: '', dms_id: '5' }), 'CDK').missing.includes('email')),
+    eq('advisor CDK both missing→reach_back wins', 'reach_back', applyCompleteness(mk({ role: 'advisor', email: '', dms_id: '' }), 'CDK').action),
+    eq('mgr with email→none', 'none', applyCompleteness(mk({ role: 'manager', email: 'm@x.com' }), 'CDK').action),
+  ];
+});
