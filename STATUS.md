@@ -94,3 +94,6 @@ comments, EZ-Wins group-naming rule. The orchestrator absorbs this as Phase 2.
 ## Outbound email (comms arm)
 - **Sends via MS Graph `sendMail`** (lib/graph.ts) from MS_USER_EMAIL's real mailbox — NOT SendGrid/Resend. Chosen because the emails are conversational: they land in Sent, come "from Blake", and replies flow back into the inbox the sweep reads (Resend/SendGrid can't thread into Outlook conversations). Resend stays a possible fallback for one-way notices only.
 - **REQUIRED Azure permission:** the app registration (MS_CLIENT_ID) needs **`Mail.Send`** *application* permission with admin consent. The email assistant only had read/draft scopes, so this is likely NOT yet granted. Until it is, the OUTBOX "send" actions will 403 — drafts still work. Grant: Azure Portal → App registrations → (the app) → API permissions → Microsoft Graph → Application permissions → Mail.Send → Grant admin consent.
+
+## Crons disabled until cutover
+Orchestrator sweep/cadence crons removed from vercel.json (2026-07-01) so the orchestrator does NOT auto-sweep while the email assistant is still live (shared EZ-Assistant-Processed tag causes interference). Endpoints remain manually triggerable (CRON_SECRET or logged-in admin). Re-add crons at cutover.
