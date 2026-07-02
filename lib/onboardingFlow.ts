@@ -1,9 +1,10 @@
 import { findDealershipsByName, createDealership, setDealershipRefs, setDealershipOnboarding, type Dealership } from '@/lib/dealerships';
-import { createOrLinkPortalDealer } from '@/lib/portal';
+import { createOrLinkPortalDealer, setPortalDealerRegion } from '@/lib/portal';
 import { addContacts } from '@/lib/contacts';
 import { createProject, getProjectsByDealership, setProjectRefs } from '@/lib/projects';
 import { createOnboardingTask } from '@/lib/onboardingTask';
 import { dmsToConduit } from '@/lib/dms';
+import { regionForRep } from '@/lib/team';
 import { logDecision } from '@/lib/decisions';
 
 const FEED_APPROVAL_PENDING = '901113435718';
@@ -32,6 +33,8 @@ export async function openOnboardingFromDecision(
   const name = (decision.dealer_name || decision.dms_onboarding?.dealer_or_group_name || '').trim();
   if (!name) throw new Error('no dealer name in the decision');
   const dms = decision.dms_onboarding?.dms || decision.dms || null;
+  // The introducing MOC rep drives the region (no address needed at intro time).
+  const region = await regionForRep(decision.moc_rep?.email, decision.moc_rep?.name);
 
   // Resolve or create the dealership + portal pipeline entry.
   const existing = await findDealershipsByName(name);
@@ -39,14 +42,22 @@ export async function openOnboardingFromDecision(
   let created = false;
   if (existing.length) {
     dealership = existing[0];
+    // Backfill region from the rep if it's still blank.
+    if (region && !dealership.region) {
+      dealership = (await setDealershipOnboarding(dealership.id, { region })) || dealership;
+    }
   } else {
-    dealership = await createDealership({ name, dms, conduit: dmsToConduit(dms), lifecycle_stage: 'pending' });
+    dealership = await createDealership({ name, dms, conduit: dmsToConduit(dms), region, lifecycle_stage: 'pending' });
     created = true;
     try {
       const pd = await createOrLinkPortalDealer({ dealershipId: dealership.id, name: dealership.name, dms: dealership.dms });
       await setDealershipRefs(dealership.id, { portal_dealer_id: pd.portalDealerId });
       dealership.portal_dealer_id = pd.portalDealerId;
     } catch { /* portal push best-effort */ }
+  }
+  // Push the region onto the portal dealer (best-effort).
+  if (region && dealership.portal_dealer_id) {
+    try { await setPortalDealerRegion(dealership.portal_dealer_id, region); } catch { /* best-effort */ }
   }
 
   // Contacts: MOC rep (internal) + the dealer contact (external), from the request.
@@ -60,7 +71,7 @@ export async function openOnboardingFromDecision(
   const projects = await getProjectsByDealership(dealership.id);
   let proj = projects.find((p) => p.type === 'onboarding');
   if (!proj) proj = await createProject({ type: 'onboarding', dealership_id: dealership.id });
-  const { taskId } = await createOnboardingTask({ dealership, projectId: proj.id, listId: FEED_APPROVAL_PENDING });
+  const { taskId } = await createOnboardingTask({ dealership, projectId: proj.id, listId: FEED_APPROVAL_PENDING, requestedBy: decision.moc_rep?.name || null });
   await setProjectRefs(proj.id, { clickup_task_id: taskId, outlook_conversation_id: conversationId || undefined });
   await setDealershipOnboarding(dealership.id, { lifecycle_stage: 'pending', platform_fields: { ...(dealership.platform_fields || {}), pending_task_id: taskId } });
 

@@ -1,6 +1,6 @@
 import { fetchRecentInbox, fetchThread, tagProcessed, type Msg } from '@/lib/graph';
 import { classifyEmail, type Decision } from '@/lib/classify';
-import { enqueueAction, type ActionKind } from '@/lib/actions';
+import { enqueueAction, hasOpenActionForConversation, type ActionKind } from '@/lib/actions';
 import { getProjectByConversation } from '@/lib/projects';
 import { logDecision } from '@/lib/decisions';
 
@@ -42,6 +42,10 @@ const OUTCOME_TAG: Record<string, string> = {
 async function proposeActions(msg: Msg, decision: Decision): Promise<number> {
   const project = await getProjectByConversation(msg.conversationId);
   const projectId = project?.id || null;
+
+  // Dedup: if this thread already has a project (already onboarded) or an open
+  // action in the OUTBOX, don't propose again.
+  if (project || (await hasOpenActionForConversation(msg.conversationId))) return 0;
   const base = { conversation_id: msg.conversationId, subject: msg.subject, dealer_name: decision.dealer_name, dms: decision.dms, roster_present: decision.roster_present, from: msg.from };
   const actions: { kind: ActionKind; payload: Record<string, unknown> }[] = [];
 

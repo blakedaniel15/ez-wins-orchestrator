@@ -47,6 +47,16 @@ export async function getAction(id: number): Promise<Action | null> {
   return rows[0] || null;
 }
 
+// Is there already a pending/approved action for this conversation? (dedup guard)
+export async function hasOpenActionForConversation(conversationId: string): Promise<boolean> {
+  const rows = (await sql`
+    select 1 from action_queue
+    where conversation_id = ${conversationId} and state in ('pending', 'approved', 'sent')
+    limit 1
+  `) as unknown[];
+  return rows.length > 0;
+}
+
 // Record a decision on an action. `payload` (when editing) replaces proposed_payload.
 export async function decideAction(
   id: number,

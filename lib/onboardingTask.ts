@@ -1,4 +1,4 @@
-import { createTask, setTaskStatus, writeProjectIdField, writeDealerIdField, writeMocRegionField } from '@/lib/clickup';
+import { createTask, setTaskStatus, writeProjectIdField, writeDealerIdField, writeFieldsByName } from '@/lib/clickup';
 import { buildDescription, type DescInput } from '@/lib/descriptions';
 import { titleCase } from '@/lib/brands';
 import type { Dealership } from '@/lib/dealerships';
@@ -18,6 +18,7 @@ export async function createOnboardingTask(input: {
   projectId: string;
   listId: string;
   ownerGroupName?: string | null;
+  requestedBy?: string | null;
 }): Promise<{ taskId: string; warning?: string }> {
   const d = input.dealership;
   const platform = PLATFORM_BY_CONDUIT[d.conduit || ''] || 'Fortellis';
@@ -38,15 +39,20 @@ export async function createOnboardingTask(input: {
   // Stamp the universal IDs.
   await writeDealerIdField(taskId, d.id);
   await writeProjectIdField(taskId, input.projectId);
-  // MOC Region only when resolved (skip 'ASK' — it waits in the review queue).
-  // Best-effort: a missing 'MOC Region' field must not fail task creation.
+  // Set the human-facing fields in one pass. Best-effort — a missing field on the
+  // space must not fail task creation; report any that couldn't be set.
   let warning: string | undefined;
-  if (d.region && d.region !== 'ASK') {
-    try {
-      await writeMocRegionField(taskId, d.region);
-    } catch (e) {
-      warning = `MOC Region not set: ${(e as Error).message}`;
-    }
+  try {
+    const fields: { name: string; value: string; env?: string }[] = [
+      { name: 'Department', value: 'Onboarding' },
+      { name: 'Approval Stage', value: 'Pending' },
+    ];
+    if (d.region && d.region !== 'ASK') fields.push({ name: 'MOC Region', value: d.region, env: process.env.CLICKUP_MOC_REGION_FIELD_UUID });
+    if (input.requestedBy) fields.push({ name: 'Requested By', value: input.requestedBy });
+    const { missing } = await writeFieldsByName(taskId, fields);
+    if (missing.length) warning = `fields not set (no matching custom field): ${missing.join(', ')}`;
+  } catch (e) {
+    warning = (e as Error).message;
   }
   return { taskId, warning };
 }

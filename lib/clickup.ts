@@ -73,6 +73,26 @@ export async function addComment(taskId: string, text: string): Promise<void> {
   if (!res.ok) throw new Error(`ClickUp comment failed (${res.status}): ${await res.text()}`);
 }
 
+// Set several NAME-resolved custom fields in one task fetch. Best-effort per field:
+// returns which were set and which have no matching field on the task's space.
+export async function writeFieldsByName(
+  taskId: string,
+  fields: { name: string; value: string; env?: string }[]
+): Promise<{ set: string[]; missing: string[] }> {
+  const task = await getTask(taskId);
+  if (!task) throw new Error(`Task ${taskId} not found in ClickUp.`);
+  const set: string[] = [];
+  const missing: string[] = [];
+  for (const f of fields) {
+    if (f.value == null || f.value === '') continue;
+    const fid = fieldIdByName(task, f.name, f.env);
+    if (!fid) { missing.push(f.name); continue; }
+    await postFieldValue(taskId, fid, f.value);
+    set.push(f.name);
+  }
+  return { set, missing };
+}
+
 // Set the plain-text "MOC Region" custom field (resolved by NAME — per-space UUIDs).
 export async function writeMocRegionField(taskId: string, region: string): Promise<void> {
   const task = await getTask(taskId);

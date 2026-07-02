@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isAuthed, unauthorized } from '@/lib/security';
 import { getDealership, setDealershipOnboarding } from '@/lib/dealerships';
-import { getProjectsByDealership, createProject, setProjectRefs, type Project } from '@/lib/projects';
+import { getProjectsByDealership, getProjectByConversation, createProject, setProjectRefs, type Project } from '@/lib/projects';
 import { createOnboardingTask, completeOnboardingTask } from '@/lib/onboardingTask';
-import { setPortalDealerStatus } from '@/lib/portal';
+import { setPortalDealerStatus, setPortalDealerRegion } from '@/lib/portal';
+import { writeFieldsByName } from '@/lib/clickup';
+import { regionForRep } from '@/lib/team';
 import { getGroup } from '@/lib/groups';
 import { fetchThread } from '@/lib/graph';
 import { classifyEmail } from '@/lib/classify';
 import { addContacts, listContacts } from '@/lib/contacts';
 import { buildStage2Email, buildStage3Email, buildDealerEmail } from '@/lib/email';
-import { enqueueAction } from '@/lib/actions';
+import { enqueueAction, hasOpenActionForConversation } from '@/lib/actions';
 import { logDecision } from '@/lib/decisions';
 import { sql } from '@/lib/db';
 
@@ -39,6 +41,10 @@ export async function POST(req: NextRequest) {
       if (decision.email_type !== 'dms_onboarding') {
         return NextResponse.json({ ok: false, error: `classified as ${decision.email_type}, not onboarding` }, { status: 422 });
       }
+      const existingProj = await getProjectByConversation(b.conversationId);
+      if (existingProj || (await hasOpenActionForConversation(b.conversationId))) {
+        return NextResponse.json({ ok: false, error: 'already onboarded or a proposal is already pending for this thread' }, { status: 409 });
+      }
       const action = await enqueueAction({
         conversation_id: b.conversationId, kind: 'create_task',
         proposed_payload: { intent: 'open_onboarding', decision, conversation_id: b.conversationId, dealer_name: decision.dealer_name, dms: decision.dms },
@@ -52,6 +58,31 @@ export async function POST(req: NextRequest) {
     if (b.action === 'contacts') {
       const added = await addContacts({ dealership_id: d.id, group_id: d.group_id, source: 'request', people: b.people || [] });
       return NextResponse.json({ ok: true, added });
+    }
+
+    if (b.action === 'restamp') {
+      // Fix an existing dealership: derive region from its MOC contact and re-stamp
+      // region + Requested By onto its ClickUp task. For records created before the
+      // region-from-rep wiring.
+      const mocs = await listContacts(d.id, 'moc');
+      const rep = mocs[0];
+      const region = rep ? await regionForRep(rep.email, rep.name) : null;
+      if (region) {
+        await setDealershipOnboarding(d.id, { region });
+        if (d.portal_dealer_id) { try { await setPortalDealerRegion(d.portal_dealer_id, region); } catch { /* best-effort */ } }
+      }
+      const projects = await getProjectsByDealership(d.id);
+      const proj = projects.find((p) => p.type === 'onboarding');
+      let stamped: string[] = [];
+      if (proj?.clickup_task_id) {
+        const fields: { name: string; value: string; env?: string }[] = [];
+        if (region) fields.push({ name: 'MOC Region', value: region, env: process.env.CLICKUP_MOC_REGION_FIELD_UUID });
+        if (rep?.name) fields.push({ name: 'Requested By', value: rep.name });
+        fields.push({ name: 'Department', value: 'Onboarding' }, { name: 'Approval Stage', value: 'Pending' });
+        const r = await writeFieldsByName(proj.clickup_task_id, fields);
+        stamped = r.set;
+      }
+      return NextResponse.json({ ok: true, region, requestedBy: rep?.name || null, stamped });
     }
 
     if (b.action === 'stage1') {

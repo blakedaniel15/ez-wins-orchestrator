@@ -56,6 +56,22 @@ export interface PortalGroup {
   [k: string]: unknown;
 }
 
+export interface PortalTeam {
+  gsms?: { name?: string; email?: string; region?: string }[];
+  rsms?: { name?: string; email?: string; region?: string }[];
+  ams?: { name?: string; email?: string; region?: string }[];
+}
+
+// The MOC team directory (GSM/RSM/AM → region). Used to derive a dealer's region
+// from the rep who introduced them when the intro email has no address.
+export async function getPortalTeam(): Promise<PortalTeam> {
+  const res = await fetch(`${base()}/api/storage?key=${encodeURIComponent('ezw:team:v1')}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Portal team fetch failed (${res.status}): ${await res.text()}`);
+  const json = (await res.json()) as { value: string | null };
+  if (!json.value) return {};
+  return JSON.parse(json.value) as PortalTeam;
+}
+
 export async function getPortalGroups(): Promise<PortalGroup[]> {
   const res = await fetch(`${base()}/api/storage?key=${encodeURIComponent('ezw:groups:v1')}`, {
     cache: 'no-store',
