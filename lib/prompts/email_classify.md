@@ -1019,6 +1019,7 @@ If it's clearly one of these activations, `email_type` MUST be `"integration_app
 "email_type": "...",                     // one of the values above
 "dms": "CDK" | "Reynolds" | "Tekion" | "DealerVault" | "DealerTrack" | "PBS" | "Other" | null,
 "dealer_name": "<the dealership name if present, else null>",
+"group_name": "<the parent DEALER GROUP name if this store belongs to / is being onboarded as part of a group — infer from context, e.g. 'pilot his store for the group' + 'Galpin Ford' → 'Galpin Motors'; null if it's an independent single store>",
 "moc_rep": { "name": "...", "email": "..." } | null,   // the introducing MOC rep, for onboarding
 "roster_present": true | false           // true if the email body or an attachment appears to contain a USER LIST (names/emails/roles) to be added
 ```
