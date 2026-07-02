@@ -11,11 +11,19 @@ function authHeader(): string {
   return t;
 }
 
+interface ClickUpField {
+  id: string;
+  name?: string;
+  type?: string;
+  type_config?: { options?: { id: string; name?: string; orderindex?: number }[] };
+  value?: unknown;
+}
+
 interface ClickUpTask {
   id: string;
   name: string;
   status?: { type?: string; status?: string };
-  custom_fields?: { id: string; name?: string; value?: unknown }[];
+  custom_fields?: ClickUpField[];
 }
 
 export async function getTask(taskId: string): Promise<ClickUpTask | null> {
@@ -78,19 +86,33 @@ export async function addComment(taskId: string, text: string): Promise<void> {
 export async function writeFieldsByName(
   taskId: string,
   fields: { name: string; value: string; env?: string }[]
-): Promise<{ set: string[]; missing: string[] }> {
+): Promise<{ set: string[]; missing: string[]; failed: string[] }> {
   const task = await getTask(taskId);
   if (!task) throw new Error(`Task ${taskId} not found in ClickUp.`);
   const set: string[] = [];
   const missing: string[] = [];
+  const failed: string[] = [];
   for (const f of fields) {
     if (f.value == null || f.value === '') continue;
-    const fid = fieldIdByName(task, f.name, f.env);
-    if (!fid) { missing.push(f.name); continue; }
-    await postFieldValue(taskId, fid, f.value);
-    set.push(f.name);
+    const cf =
+      (task.custom_fields || []).find((c) => c.name === f.name) ||
+      (f.env ? (task.custom_fields || []).find((c) => c.id === f.env) : undefined);
+    if (!cf) { missing.push(f.name); continue; }
+    try {
+      if (cf.type === 'drop_down') {
+        // Dropdowns want the option's id, not the label — resolve by option name.
+        const opt = (cf.type_config?.options || []).find((o) => (o.name || '').toLowerCase() === f.value.toLowerCase());
+        if (!opt) { failed.push(`${f.name} (no option "${f.value}")`); continue; }
+        await postFieldValue(taskId, cf.id, opt.id);
+      } else {
+        await postFieldValue(taskId, cf.id, f.value);
+      }
+      set.push(f.name);
+    } catch (e) {
+      failed.push(`${f.name}: ${(e as Error).message}`);
+    }
   }
-  return { set, missing };
+  return { set, missing, failed };
 }
 
 // Set the plain-text "MOC Region" custom field (resolved by NAME — per-space UUIDs).

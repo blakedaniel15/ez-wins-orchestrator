@@ -49,8 +49,9 @@ export async function createOnboardingTask(input: {
     ];
     if (d.region && d.region !== 'ASK') fields.push({ name: 'MOC Region', value: d.region, env: process.env.CLICKUP_MOC_REGION_FIELD_UUID });
     if (input.requestedBy) fields.push({ name: 'Requested By', value: input.requestedBy });
-    const { missing } = await writeFieldsByName(taskId, fields);
-    if (missing.length) warning = `fields not set (no matching custom field): ${missing.join(', ')}`;
+    const { missing, failed } = await writeFieldsByName(taskId, fields);
+    const notes = [...missing.map((m) => `${m} (missing)`), ...failed];
+    if (notes.length) warning = `fields not set: ${notes.join('; ')}`;
   } catch (e) {
     warning = (e as Error).message;
   }
